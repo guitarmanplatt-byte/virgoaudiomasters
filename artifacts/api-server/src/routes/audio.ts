@@ -24,29 +24,26 @@ const storage = multer.diskStorage({
   },
 });
 
+const AUDIO_EXTENSIONS = /\.(mp3|wav|ogg|flac|aac|m4a|mp4|aif|aiff|wma|opus|webm)$/i;
+const AUDIO_MIMETYPES = new Set([
+  "audio/mpeg", "audio/mp3", "audio/wav", "audio/wave", "audio/x-wav",
+  "audio/ogg", "audio/flac", "audio/x-flac", "audio/aac", "audio/mp4",
+  "audio/m4a", "audio/x-m4a", "audio/aiff", "audio/x-aiff",
+  "audio/opus", "audio/webm", "video/mp4", "video/webm",
+  // Browsers sometimes report these generic types for local audio files
+  "application/octet-stream", "application/x-audio",
+]);
+
 const upload = multer({
   storage,
   limits: { fileSize: 200 * 1024 * 1024 }, // 200MB
   fileFilter: (_req, file, cb) => {
-    const allowed = [
-      "audio/mpeg",
-      "audio/mp3",
-      "audio/wav",
-      "audio/wave",
-      "audio/x-wav",
-      "audio/ogg",
-      "audio/flac",
-      "audio/x-flac",
-      "audio/aac",
-      "audio/mp4",
-      "audio/m4a",
-      "audio/x-m4a",
-      "video/mp4",
-    ];
-    if (allowed.includes(file.mimetype) || file.originalname.match(/\.(mp3|wav|ogg|flac|aac|m4a|mp4)$/i)) {
+    const byMime = AUDIO_MIMETYPES.has(file.mimetype);
+    const byExt = AUDIO_EXTENSIONS.test(file.originalname);
+    if (byMime || byExt) {
       cb(null, true);
     } else {
-      cb(new Error("Only audio files are allowed"));
+      cb(new Error(`Unsupported file type: ${file.mimetype} (${file.originalname})`));
     }
   },
 });
@@ -74,9 +71,21 @@ const defaultMasteringSettings = {
 };
 
 // POST /audio/upload
-router.post("/audio/upload", upload.single("audio"), async (req, res): Promise<void> => {
+router.post(
+  "/audio/upload",
+  // Run multer and surface its errors as JSON (file-type rejection, size limit, etc.)
+  (req, res, next) => {
+    upload.single("audio")(req, res, (err) => {
+      if (err) {
+        res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+        return;
+      }
+      next();
+    });
+  },
+  async (req, res): Promise<void> => {
   if (!req.file) {
-    res.status(400).json({ error: "No audio file provided" });
+    res.status(400).json({ error: "No audio file provided — make sure the FormData field is named 'audio'" });
     return;
   }
 

@@ -34,10 +34,8 @@ export default function Dashboard() {
     setIsDragging(false);
     
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const file = e.dataTransfer.files[0];
-      if (file.type.startsWith('audio/')) {
-        handleUpload(file);
-      }
+      // Accept any file — the server will reject non-audio formats
+      handleUpload(e.dataTransfer.files[0]);
     }
   };
 

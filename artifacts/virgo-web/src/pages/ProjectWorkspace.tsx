@@ -11,16 +11,23 @@ import {
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Switch as UISwitch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { 
-  Play, Pause, Square, Save, Loader2, ArrowLeft, 
+  Play, Pause, Square, Loader2, ArrowLeft, 
   Settings2, Activity, SlidersHorizontal, Share, Download, Edit2, Check,
-  Badge
+  Waves
 } from 'lucide-react';
+
+// Stable waveform bar heights — seeded deterministically so they don't re-randomise on every render
+const WAVEFORM_BARS = Array.from({ length: 150 }, (_, i) => {
+  const x = Math.sin(i * 2.399963) * 43758.5453;
+  return 10 + (Math.abs(x - Math.floor(x)) * 80);
+});
 
 export default function ProjectWorkspace() {
   const [, params] = useRoute('/project/:id');
@@ -41,7 +48,13 @@ export default function ProjectWorkspace() {
   // Local state for UI responsiveness before API commits
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
+  const [audioError, setAudioError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Web Audio API nodes for live EQ preview
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const filtersRef = useRef<BiquadFilterNode[]>([]);
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState('');
@@ -63,39 +76,98 @@ export default function ProjectWorkspace() {
     }
   }, [project]);
 
-  // Handle Playback
+  // Build a BiquadFilter chain from EQ preset bands, replacing any existing chain.
+  const applyEqChain = useCallback((bands: Array<{ frequency: number; gain: number; q: number; type: string }>) => {
+    const ctx = audioCtxRef.current;
+    const source = sourceNodeRef.current;
+    if (!ctx || !source) return;
+
+    // Tear down old chain
+    try { source.disconnect(); } catch {}
+    for (const f of filtersRef.current) { try { f.disconnect(); } catch {} }
+
+    if (!bands.length) {
+      source.connect(ctx.destination);
+      filtersRef.current = [];
+      return;
+    }
+
+    const filters = bands.map(band => {
+      const f = ctx.createBiquadFilter();
+      f.type = band.type as BiquadFilterType;
+      f.frequency.value = band.frequency;
+      f.gain.value = band.gain;
+      f.Q.value = band.q;
+      return f;
+    });
+
+    let prev: AudioNode = source;
+    for (const f of filters) { prev.connect(f); prev = f; }
+    prev.connect(ctx.destination);
+    filtersRef.current = filters;
+  }, []);
+
+  // Initialize AudioContext + MediaElementSource on first user gesture.
+  const initAudioCtx = useCallback(() => {
+    if (!audioRef.current || audioCtxRef.current) return;
+    const ctx = new AudioContext();
+    audioCtxRef.current = ctx;
+    const source = ctx.createMediaElementSource(audioRef.current);
+    sourceNodeRef.current = source;
+    source.connect(ctx.destination); // flat until a preset is applied
+  }, []);
+
+  // Handle Playback — create audio element with crossOrigin for Web Audio API
   useEffect(() => {
     if (project?.fileUrl) {
       if (!audioRef.current) {
-        audioRef.current = new Audio(project.fileUrl);
-        audioRef.current.addEventListener('timeupdate', () => {
-          setCurrentTime(audioRef.current?.currentTime || 0);
-        });
-        audioRef.current.addEventListener('ended', () => {
-          setIsPlaying(false);
-          setCurrentTime(0);
-        });
-      } else if (audioRef.current.src !== project.fileUrl && !project.fileUrl.startsWith('/')) {
-         // handle relative urls safely if needed
-         audioRef.current.src = project.fileUrl;
+        // Use an absolute URL so the request reliably hits the API server
+        const audioUrl = `${window.location.origin}${project.fileUrl}`;
+        const audio = new Audio();
+        audio.crossOrigin = 'anonymous'; // required for createMediaElementSource
+        audio.src = audioUrl;
+        audio.addEventListener('timeupdate', () => setCurrentTime(audio.currentTime || 0));
+        audio.addEventListener('ended', () => { setIsPlaying(false); setCurrentTime(0); });
+        audio.addEventListener('error', () => setAudioError('Could not load audio file.'));
+        audioRef.current = audio;
       }
     }
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
+      audioRef.current?.pause();
+      audioCtxRef.current?.close();
+      audioCtxRef.current = null;
+      sourceNodeRef.current = null;
+      filtersRef.current = [];
     };
   }, [project?.fileUrl]);
 
+  // Live EQ — re-apply chain whenever the selected preset changes (if audio context is active)
+  useEffect(() => {
+    if (!audioCtxRef.current) return;
+    const preset = eqPresets?.find(p => p.id === enhancement?.eqPresetId);
+    applyEqChain(preset?.bands ?? []);
+  }, [enhancement?.eqPresetId, eqPresets, applyEqChain]);
+
   const togglePlay = () => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();
-      } else {
-        audioRef.current.play();
-      }
-      setIsPlaying(!isPlaying);
+    if (!audioRef.current) return;
+
+    // First play: spin up AudioContext and apply current EQ preset
+    if (!audioCtxRef.current) {
+      initAudioCtx();
+      const preset = eqPresets?.find(p => p.id === enhancement?.eqPresetId);
+      applyEqChain(preset?.bands ?? []);
     }
+
+    if (audioCtxRef.current?.state === 'suspended') {
+      audioCtxRef.current.resume();
+    }
+
+    if (isPlaying) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play().catch(err => setAudioError(String(err)));
+    }
+    setIsPlaying(!isPlaying);
   };
 
   const stopPlayback = () => {
@@ -244,38 +316,49 @@ export default function ProjectWorkspace() {
         <div className="flex-1 flex flex-col min-w-0 border-r border-border overflow-y-auto">
           
           {/* Waveform Area */}
-          <div className="h-64 flex-shrink-0 bg-background border-b border-border p-6 flex flex-col">
+          <div className="h-72 flex-shrink-0 bg-background border-b border-border p-6 flex flex-col">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Waveform Analysis</h2>
+              <div className="flex items-center gap-3">
+                <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Waveform Analysis</h2>
+                {enhancement?.eqPresetId && (
+                  <Badge className="bg-primary/15 text-primary border-primary/30 gap-1 text-xs animate-in fade-in">
+                    <Waves className="w-3 h-3" />
+                    {eqPresets?.find(p => p.id === enhancement.eqPresetId)?.name ?? 'EQ Active'}
+                  </Badge>
+                )}
+              </div>
               <div className="font-mono text-sm text-foreground bg-card px-3 py-1 rounded border border-border shadow-sm">
                 {formatTime(currentTime)} / {formatTime(project.duration || 0)}
               </div>
             </div>
+
+            {audioError && (
+              <p className="text-xs text-destructive mb-2">{audioError}</p>
+            )}
             
-            {/* Visualizer Placeholder */}
+            {/* Visualizer */}
             <div className="flex-1 rounded-lg bg-card/50 border border-border relative overflow-hidden flex items-center justify-center p-4">
               {/* Spectral Gradient BG */}
               <div className="absolute inset-0 bg-gradient-to-r from-blue-900/20 via-purple-900/20 to-teal-900/20 mix-blend-screen opacity-50" />
               
-              {/* Decorative CSS Bars */}
-              <div className="w-full h-full flex items-center gap-1 overflow-hidden relative z-10">
-                {Array.from({ length: 150 }).map((_, i) => {
-                  const height = 10 + Math.random() * 80;
-                  const isPlayed = (i / 150) * (project.duration || 1) <= currentTime;
+              {/* Decorative CSS Bars — heights seeded from index so they're stable */}
+              <div className="w-full h-full flex items-center gap-[1px] overflow-hidden relative z-10">
+                {WAVEFORM_BARS.map((height, i) => {
+                  const isPlayed = (i / WAVEFORM_BARS.length) * (project.duration || 1) <= currentTime;
                   return (
                     <div 
                       key={i} 
-                      className={`flex-1 rounded-full transition-all duration-300 ${isPlayed ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+                      className={`flex-1 rounded-full transition-colors duration-150 ${isPlayed ? 'bg-primary' : 'bg-muted-foreground/30'}`}
                       style={{ height: `${height}%`, opacity: isPlayed ? 1 : 0.6 }}
                     />
                   );
                 })}
               </div>
 
-              {/* Playhead Line */}
-              {project.duration && (
+              {/* Playhead */}
+              {project.duration && currentTime > 0 && (
                 <div 
-                  className="absolute top-0 bottom-0 w-px bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)] z-20"
+                  className="absolute top-0 bottom-0 w-px bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)] z-20 transition-none pointer-events-none"
                   style={{ left: `${(currentTime / project.duration) * 100}%` }}
                 >
                   <div className="w-3 h-3 bg-white rounded-full absolute -top-1.5 -translate-x-[5px] shadow-sm" />

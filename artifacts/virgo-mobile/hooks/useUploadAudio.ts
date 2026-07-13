@@ -35,8 +35,11 @@ export function useUploadAudio() {
         type: mimeType || 'audio/mpeg',
       } as unknown as Blob);
 
+      // Use the same domain that the generated API hooks use (set via setBaseUrl in _layout.tsx).
+      // EXPO_PUBLIC_DOMAIN is the raw host without scheme.
       const domain = process.env.EXPO_PUBLIC_DOMAIN;
-      const baseUrl = domain ? `https://${domain}` : '';
+      if (!domain) throw new Error('EXPO_PUBLIC_DOMAIN is not set — cannot reach API server.');
+      const baseUrl = `https://${domain}`;
 
       const response = await fetch(`${baseUrl}/api/audio/upload`, {
         method: 'POST',
