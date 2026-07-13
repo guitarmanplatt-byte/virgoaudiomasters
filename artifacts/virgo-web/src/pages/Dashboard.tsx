@@ -94,7 +94,7 @@ export default function Dashboard() {
             <input 
               type="file" 
               className="hidden" 
-              accept="audio/*" 
+              accept=".mp3,.wav,.m4a,.flac,.aac,.aiff,.aif,.ogg,.opus,.wma,.webm" 
               ref={fileInputRef}
               onChange={handleFileSelect}
               disabled={uploadAudio.isPending}
@@ -110,7 +110,7 @@ export default function Dashboard() {
                   <UploadCloud className="w-8 h-8 text-primary" />
                 </div>
                 <h3 className="text-xl font-medium text-foreground mb-2">Drag and drop audio file here</h3>
-                <p className="text-sm text-muted-foreground mb-6">WAV, FLAC, AIFF, or MP3 up to 100MB</p>
+                <p className="text-sm text-muted-foreground mb-6">WAV, FLAC, AIFF, MP3, M4A — up to 2 GB</p>
                 <Button className="font-medium bg-primary text-primary-foreground hover:bg-primary/90">
                   <Plus className="w-4 h-4 mr-2" /> Select File
                 </Button>

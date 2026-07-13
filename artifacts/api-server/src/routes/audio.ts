@@ -36,7 +36,7 @@ const AUDIO_MIMETYPES = new Set([
 
 const upload = multer({
   storage,
-  limits: { fileSize: 200 * 1024 * 1024 }, // 200MB
+  limits: { fileSize: 2 * 1024 * 1024 * 1024 }, // 2 GB
   fileFilter: (_req, file, cb) => {
     const byMime = AUDIO_MIMETYPES.has(file.mimetype);
     const byExt = AUDIO_EXTENSIONS.test(file.originalname);
