@@ -1,36 +1,403 @@
-openapi: 3.1.0
+openapi: "3.1.0"
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
-  version: 0.1.0
-  description: API specification
+  version: "1.0.0"
 servers:
   - url: /api
-    description: Base API path
-tags:
-  - name: health
-    description: Health operations
+
 paths:
   /healthz:
     get:
-      operationId: healthCheck
-      tags: [health]
+      operationId: getHealth
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
-          description: Healthy
+          description: OK
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /audio:
+    get:
+      operationId: listAudioProjects
+      summary: List all audio projects
+      responses:
+        "200":
+          description: List of audio projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AudioProject"
+
+  /audio/{id}:
+    get:
+      operationId: getAudioProject
+      summary: Get audio project by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Audio project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AudioProject"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteAudioProject
+      summary: Delete audio project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /audio/{id}/name:
+    patch:
+      operationId: renameAudioProject
+      summary: Rename audio project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AudioProjectRename"
+      responses:
+        "200":
+          description: Updated project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AudioProject"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /audio/{id}/enhancement:
+    patch:
+      operationId: updateEnhancementSettings
+      summary: Update enhancement processing settings
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnhancementSettingsInput"
+      responses:
+        "200":
+          description: Updated project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AudioProject"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /audio/{id}/mastering:
+    patch:
+      operationId: updateMasteringSettings
+      summary: Update mastering settings
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MasteringSettingsInput"
+      responses:
+        "200":
+          description: Updated project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AudioProject"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /eq-presets:
+    get:
+      operationId: listEqPresets
+      summary: List available EQ presets
+      responses:
+        "200":
+          description: EQ presets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EqPreset"
+
+  /genres:
+    get:
+      operationId: listMasteringGenres
+      summary: List mastering genre styles
+      responses:
+        "200":
+          description: Mastering genres
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MasteringGenre"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    AudioProject:
+      type: object
+      required: [id, name, originalFilename, fileUrl, status, createdAt, enhancementSettings, masteringSettings]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        originalFilename:
+          type: string
+        fileUrl:
+          type: string
+        status:
+          type: string
+          enum: [ready, processing, done, error]
+        createdAt:
+          type: string
+          format: date-time
+        duration:
+          type: ["number", "null"]
+        sampleRate:
+          type: ["integer", "null"]
+        enhancementSettings:
+          $ref: "#/components/schemas/EnhancementSettings"
+        masteringSettings:
+          $ref: "#/components/schemas/MasteringSettings"
+
+    AudioProjectRename:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+
+    EnhancementSettings:
+      type: object
+      required:
+        - eqPresetId
+        - stereoWidth
+        - clarityAmount
+        - humReduction
+        - noiseReduction
+        - sibilanceReduction
+        - clipRepair
+        - preRingFix
+        - enabled
+      properties:
+        eqPresetId:
+          type: ["string", "null"]
+        stereoWidth:
+          type: number
+          description: "0.0 to 2.0, 1.0 = original"
+        clarityAmount:
+          type: number
+          description: "0.0 to 1.0"
+        humReduction:
+          type: boolean
+        humFrequency:
+          type: ["integer", "null"]
+          description: "50 or 60 Hz"
+        noiseReduction:
+          type: number
+          description: "0.0 to 1.0"
+        sibilanceReduction:
+          type: number
+          description: "0.0 to 1.0"
+        clipRepair:
+          type: boolean
+        preRingFix:
+          type: boolean
+        enabled:
+          type: boolean
+
+    EnhancementSettingsInput:
+      type: object
+      properties:
+        eqPresetId:
+          type: ["string", "null"]
+        stereoWidth:
+          type: number
+        clarityAmount:
+          type: number
+        humReduction:
+          type: boolean
+        humFrequency:
+          type: ["integer", "null"]
+        noiseReduction:
+          type: number
+        sibilanceReduction:
+          type: number
+        clipRepair:
+          type: boolean
+        preRingFix:
+          type: boolean
+        enabled:
+          type: boolean
+
+    MasteringSettings:
+      type: object
+      required:
+        - genreId
+        - compressionAmount
+        - dynamicEqAmount
+        - exciterAmount
+        - targetLufs
+        - enabled
+      properties:
+        genreId:
+          type: ["string", "null"]
+        compressionAmount:
+          type: number
+          description: "0.0 to 1.0"
+        dynamicEqAmount:
+          type: number
+          description: "0.0 to 1.0"
+        exciterAmount:
+          type: number
+          description: "0.0 to 1.0"
+        targetLufs:
+          type: number
+          description: "Target integrated loudness, e.g. -14 for Spotify"
+        enabled:
+          type: boolean
+
+    MasteringSettingsInput:
+      type: object
+      properties:
+        genreId:
+          type: ["string", "null"]
+        compressionAmount:
+          type: number
+        dynamicEqAmount:
+          type: number
+        exciterAmount:
+          type: number
+        targetLufs:
+          type: number
+        enabled:
+          type: boolean
+
+    EqBand:
+      type: object
+      required: [frequency, gain, q, type]
+      properties:
+        frequency:
+          type: number
+        gain:
+          type: number
+        q:
+          type: number
+        type:
+          type: string
+          enum: [lowshelf, highshelf, peaking, lowpass, highpass, notch]
+
+    EqPreset:
+      type: object
+      required: [id, name, description, category, bands]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          enum: [voice, music, podcast, broadcast, film, restoration]
+        bands:
+          type: array
+          items:
+            $ref: "#/components/schemas/EqBand"
+
+    MasteringGenre:
+      type: object
+      required: [id, name, description, targetLufs, compressionAmount, dynamicEqAmount, exciterAmount]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        targetLufs:
+          type: number
+        compressionAmount:
+          type: number
+        dynamicEqAmount:
+          type: number
+        exciterAmount:
+          type: number
+        character:
+          type: string

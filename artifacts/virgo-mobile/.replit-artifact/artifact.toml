@@ -1,0 +1,23 @@
+kind = "mobile"
+previewPath = "/virgo-mobile/"
+title = "VirgoAudioMasters Mobile"
+version = "1.0.0"
+id = "artifacts/virgo-mobile"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/virgo-mobile/" ]
+localPort = 24113
+
+[services.development]
+run = "pnpm --filter @workspace/virgo-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/virgo-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/virgo-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "24113"
+BASE_PATH = "/virgo-mobile/"

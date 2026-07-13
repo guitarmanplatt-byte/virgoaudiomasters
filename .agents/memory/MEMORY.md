@@ -1,0 +1,1 @@
+- [VirgoAudioMasters architecture](virgo-audio-masters.md) — monorepo with api-server, virgo-web (React+Vite), virgo-mobile (Expo); OpenAPI codegen; Drizzle+Postgres; static EQ/genre data.

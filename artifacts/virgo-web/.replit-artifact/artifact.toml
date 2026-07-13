@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "VirgoAudioMasters"
+version = "1.0.0"
+id = "artifacts/virgo-web"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23894
+
+[services.development]
+run = "pnpm --filter @workspace/virgo-web run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/virgo-web", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/virgo-web/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23894"
+BASE_PATH = "/"
