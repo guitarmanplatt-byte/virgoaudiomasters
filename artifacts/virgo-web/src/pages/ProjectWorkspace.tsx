@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { 
   Play, Pause, Square, Loader2, ArrowLeft, 
   Settings2, Activity, SlidersHorizontal, Share, Download, Edit2, Check,
-  Waves
+  Waves, ArrowLeftRight
 } from 'lucide-react';
 import { DownloadDialog } from '@/components/DownloadDialog';
 import type { EqBand, MasteringParams } from '@/lib/audio-encoder';
@@ -53,10 +53,18 @@ export default function ProjectWorkspace() {
   const [audioError, setAudioError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Web Audio API nodes for live EQ preview
+  // A/B bypass toggle — when true, all processing is bypassed for comparison
+  const [bypass, setBypass] = useState(false);
+  const bypassRef = useRef(false);
+
+  // Web Audio API nodes for live processing
   const audioCtxRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
   const filtersRef = useRef<BiquadFilterNode[]>([]);
+  const compressorRef = useRef<DynamicsCompressorNode | null>(null);
+  const exciterRef = useRef<WaveShaperNode | null>(null);
+  const masterGainRef = useRef<GainNode | null>(null);
+  const chainDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState('');
@@ -79,45 +87,94 @@ export default function ProjectWorkspace() {
     }
   }, [project]);
 
-  // Build a BiquadFilter chain from EQ preset bands, replacing any existing chain.
-  const applyEqChain = useCallback((bands: Array<{ frequency: number; gain: number; q: number; type: string }>) => {
+  // Rebuild the full signal chain: EQ → Compression → Exciter → LUFS Gain.
+  // Mirrors the offline renderWithEffects chain so playback sounds identical to the export.
+  const rebuildChain = useCallback((
+    bands: Array<{ frequency: number; gain: number; q: number; type: string }>,
+    mp: MasteringParams | null | undefined,
+    isBypass: boolean,
+  ) => {
     const ctx = audioCtxRef.current;
     const source = sourceNodeRef.current;
     if (!ctx || !source) return;
 
-    // Tear down old chain
+    // Tear down all existing nodes
     try { source.disconnect(); } catch {}
     for (const f of filtersRef.current) { try { f.disconnect(); } catch {} }
+    try { compressorRef.current?.disconnect(); } catch {}
+    try { exciterRef.current?.disconnect(); } catch {}
+    try { masterGainRef.current?.disconnect(); } catch {}
+    filtersRef.current = [];
+    compressorRef.current = null;
+    exciterRef.current = null;
+    masterGainRef.current = null;
 
-    if (!bands.length) {
-      source.connect(ctx.destination);
-      filtersRef.current = [];
-      return;
+    let node: AudioNode = source;
+
+    if (!isBypass) {
+      // ── EQ ───────────────────────────────────────────────────────────────
+      if (bands.length) {
+        const filters = bands.map(band => {
+          const f = ctx.createBiquadFilter();
+          f.type = band.type as BiquadFilterType;
+          f.frequency.value = band.frequency;
+          f.gain.value = band.gain;
+          f.Q.value = band.q;
+          return f;
+        });
+        for (const f of filters) { node.connect(f); node = f; }
+        filtersRef.current = filters;
+      }
+
+      // ── Mastering chain ──────────────────────────────────────────────────
+      if (mp?.enabled) {
+        if (mp.compressionAmount > 0.01) {
+          const comp = ctx.createDynamicsCompressor();
+          const a = mp.compressionAmount;
+          comp.threshold.value = -12 - a * 22; // -12 → -34 dB
+          comp.ratio.value = 2 + a * 12;       // 2:1 → 14:1
+          comp.knee.value = 6;
+          comp.attack.value = 0.003;
+          comp.release.value = 0.25;
+          node.connect(comp); node = comp;
+          compressorRef.current = comp;
+        }
+
+        if (mp.exciterAmount > 0.05) {
+          const shaper = ctx.createWaveShaper();
+          const k = mp.exciterAmount * 80;
+          const curve = new Float32Array(4096);
+          for (let i = 0; i < 4096; i++) {
+            const x = (i * 2) / 4096 - 1;
+            curve[i] = ((Math.PI + k) * x) / (Math.PI + k * Math.abs(x));
+          }
+          shaper.curve = curve;
+          shaper.oversample = '4x';
+          node.connect(shaper); node = shaper;
+          exciterRef.current = shaper;
+        }
+
+        const gainDb = mp.targetLufs - (-14);
+        if (Math.abs(gainDb) > 0.05) {
+          const gainNode = ctx.createGain();
+          gainNode.gain.value = Math.pow(10, gainDb / 20);
+          node.connect(gainNode); node = gainNode;
+          masterGainRef.current = gainNode;
+        }
+      }
     }
 
-    const filters = bands.map(band => {
-      const f = ctx.createBiquadFilter();
-      f.type = band.type as BiquadFilterType;
-      f.frequency.value = band.frequency;
-      f.gain.value = band.gain;
-      f.Q.value = band.q;
-      return f;
-    });
-
-    let prev: AudioNode = source;
-    for (const f of filters) { prev.connect(f); prev = f; }
-    prev.connect(ctx.destination);
-    filtersRef.current = filters;
+    node.connect(ctx.destination);
   }, []);
 
-  // Initialize AudioContext + MediaElementSource on first user gesture.
+  // Initialize AudioContext + MediaElementSource on first user gesture, then apply chain.
   const initAudioCtx = useCallback(() => {
     if (!audioRef.current || audioCtxRef.current) return;
     const ctx = new AudioContext();
     audioCtxRef.current = ctx;
     const source = ctx.createMediaElementSource(audioRef.current);
     sourceNodeRef.current = source;
-    source.connect(ctx.destination); // flat until a preset is applied
+    source.connect(ctx.destination); // will be replaced by rebuildChain immediately after
   }, []);
 
   // Handle Playback — create audio element with crossOrigin for Web Audio API
@@ -141,24 +198,43 @@ export default function ProjectWorkspace() {
       audioCtxRef.current = null;
       sourceNodeRef.current = null;
       filtersRef.current = [];
+      compressorRef.current = null;
+      exciterRef.current = null;
+      masterGainRef.current = null;
     };
   }, [project?.fileUrl]);
 
-  // Live EQ — re-apply chain whenever the selected preset changes (if audio context is active)
+  // Rebuild the live signal chain whenever EQ preset or mastering settings change.
+  // Debounced 120 ms so rapid slider drags don't thrash the graph.
   useEffect(() => {
     if (!audioCtxRef.current) return;
-    const preset = eqPresets?.find(p => p.id === enhancement?.eqPresetId);
-    applyEqChain(preset?.bands ?? []);
-  }, [enhancement?.eqPresetId, eqPresets, applyEqChain]);
+    if (chainDebounceRef.current) clearTimeout(chainDebounceRef.current);
+    chainDebounceRef.current = setTimeout(() => {
+      const preset = eqPresets?.find(p => p.id === enhancement?.eqPresetId);
+      rebuildChain(preset?.bands ?? [], mastering as MasteringParams | null, bypassRef.current);
+    }, 120);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enhancement?.eqPresetId, mastering, eqPresets, rebuildChain]);
+
+  // Toggle A/B bypass: immediately rewires the graph without waiting for debounce.
+  const toggleBypass = useCallback(() => {
+    const next = !bypassRef.current;
+    bypassRef.current = next;
+    setBypass(next);
+    if (audioCtxRef.current) {
+      const preset = eqPresets?.find(p => p.id === enhancement?.eqPresetId);
+      rebuildChain(preset?.bands ?? [], mastering as MasteringParams | null, next);
+    }
+  }, [eqPresets, enhancement?.eqPresetId, mastering, rebuildChain]);
 
   const togglePlay = () => {
     if (!audioRef.current) return;
 
-    // First play: spin up AudioContext and apply current EQ preset
+    // First play: spin up AudioContext and apply current chain immediately
     if (!audioCtxRef.current) {
       initAudioCtx();
       const preset = eqPresets?.find(p => p.id === enhancement?.eqPresetId);
-      applyEqChain(preset?.bands ?? []);
+      rebuildChain(preset?.bands ?? [], mastering as MasteringParams | null, bypassRef.current);
     }
 
     if (audioCtxRef.current?.state === 'suspended') {
@@ -383,6 +459,26 @@ export default function ProjectWorkspace() {
               >
                 {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-1" />}
               </Button>
+
+              {/* A/B Comparison — hold to hear original, release for processed */}
+              <button
+                onMouseDown={toggleBypass}
+                onMouseUp={toggleBypass}
+                onTouchStart={toggleBypass}
+                onTouchEnd={toggleBypass}
+                onClick={e => e.preventDefault()}
+                title={bypass ? 'Hearing: Original (dry)' : 'Hearing: Processed — hold to compare'}
+                className={`
+                  h-10 px-3 rounded-full border text-xs font-semibold tracking-widest uppercase
+                  flex items-center gap-1.5 select-none transition-all duration-150
+                  ${bypass
+                    ? 'bg-muted border-muted-foreground/40 text-muted-foreground'
+                    : 'bg-primary/10 border-primary/40 text-primary hover:bg-primary/20'}
+                `}
+              >
+                <ArrowLeftRight className="w-3 h-3" />
+                {bypass ? 'Original' : 'Processed'}
+              </button>
             </div>
           </div>
 
