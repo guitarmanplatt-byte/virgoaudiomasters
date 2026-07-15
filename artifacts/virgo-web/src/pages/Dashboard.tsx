@@ -98,32 +98,27 @@ export default function Dashboard() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, []);
 
-  // ── Document-level drag listeners (works inside Replit's iframe) ─────────
-  // React synthetic events on elements are blocked/unreliable in sandboxed
-  // iframes. Raw document listeners are the only reliable approach.
+  // ── Document-level drag listeners ────────────────────────────────────────
   useEffect(() => {
+    const hasFiles = (e: DragEvent) =>
+      // DOMStringList uses .contains(), not .includes()
+      !!e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files');
+
     const onDragEnter = (e: DragEvent) => {
       e.preventDefault();
-      // Only react to actual file drags, not element drags
-      if (!e.dataTransfer?.types.includes('Files')) return;
+      if (!hasFiles(e)) return;
       dragCounterRef.current += 1;
       setIsDragging(true);
     };
-
     const onDragOver = (e: DragEvent) => {
-      e.preventDefault(); // REQUIRED — tells browser a drop is allowed
+      e.preventDefault();
       if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
     };
-
     const onDragLeave = (e: DragEvent) => {
-      if (!e.dataTransfer?.types.includes('Files')) return;
-      dragCounterRef.current -= 1;
-      if (dragCounterRef.current <= 0) {
-        dragCounterRef.current = 0;
-        setIsDragging(false);
-      }
+      if (!hasFiles(e)) return;
+      dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+      if (dragCounterRef.current === 0) setIsDragging(false);
     };
-
     const onDrop = (e: DragEvent) => {
       e.preventDefault();
       dragCounterRef.current = 0;
@@ -216,39 +211,42 @@ export default function Dashboard() {
       </header>
 
       {/* ── Upload / Preview Area ──────────────────────────────────────────── */}
-      {/* Drag handling is at document level (useEffect above) — works in iframes */}
       <Card
         className={`border-2 transition-all duration-300 bg-card/50
           ${previewFile ? 'border-primary/40' : 'border-dashed'}
           ${isDragging ? 'border-primary bg-primary/5 scale-[1.005]' : 'border-border'}
         `}
       >
-        {/* Hidden file input — opened by the "Select File" button */}
-        <input
-          type="file"
-          className="hidden"
-          accept=".mp3,.wav,.m4a,.flac,.aac,.aiff,.aif,.ogg,.opus,.wma,.webm"
-          ref={fileInputRef}
-          onChange={handleFileSelect}
-        />
-
         <CardContent className="p-0">
 
           {/* ── Empty drop zone ───────────────────────────────────────────── */}
           {showDropZone && (
-            <div className="flex flex-col items-center justify-center py-16">
-              <div className="w-16 h-16 rounded-full bg-background border border-border flex items-center justify-center mb-4">
+            /*
+             * The <label> wraps the entire zone and a real <input type="file">.
+             * Clicking anywhere in the zone natively opens the OS file picker —
+             * no JavaScript .click() needed, works in all sandboxed iframes.
+             * The transparent input also accepts direct file drops in Chrome.
+             */
+            <label className="relative flex flex-col items-center justify-center py-16 cursor-pointer select-none">
+              <input
+                type="file"
+                className="sr-only"
+                accept=".mp3,.wav,.m4a,.flac,.aac,.aiff,.aif,.ogg,.opus,.wma,.webm"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+              />
+              <div className="w-16 h-16 rounded-full bg-background border border-border flex items-center justify-center mb-4 pointer-events-none">
                 <UploadCloud className="w-8 h-8 text-primary" />
               </div>
-              <h3 className="text-xl font-medium text-foreground mb-2">Drag and drop audio file here</h3>
-              <p className="text-sm text-muted-foreground mb-6">WAV, FLAC, AIFF, MP3, M4A — up to 2 GB</p>
-              <Button
-                className="font-medium bg-primary text-primary-foreground hover:bg-primary/90"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Plus className="w-4 h-4 mr-2" /> Select File
-              </Button>
-            </div>
+              <h3 className="text-xl font-medium text-foreground mb-2 pointer-events-none">
+                {isDragging ? 'Drop file here' : 'Drag and drop audio file here'}
+              </h3>
+              <p className="text-sm text-muted-foreground mb-6 pointer-events-none">WAV, FLAC, AIFF, MP3, M4A — up to 2 GB</p>
+              {/* Button is inside the label — clicking it also opens file picker */}
+              <span className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium pointer-events-none">
+                <Plus className="w-4 h-4" /> Select File
+              </span>
+            </label>
           )}
 
           {/* ── File accepted — show info + waveform ──────────────────────── */}
