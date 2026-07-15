@@ -22,6 +22,8 @@ import {
   Settings2, Activity, SlidersHorizontal, Share, Download, Edit2, Check,
   Waves
 } from 'lucide-react';
+import { DownloadDialog } from '@/components/DownloadDialog';
+import type { EqBand, MasteringParams } from '@/lib/audio-encoder';
 
 // Stable waveform bar heights — seeded deterministically so they don't re-randomise on every render
 const WAVEFORM_BARS = Array.from({ length: 150 }, (_, i) => {
@@ -58,6 +60,7 @@ export default function ProjectWorkspace() {
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState('');
+  const [showDownload, setShowDownload] = useState(false);
 
   // Refs for tracking initialized states
   const initializedId = useRef<string | null>(null);
@@ -303,7 +306,10 @@ export default function ProjectWorkspace() {
           <Button variant="outline" className="bg-background">
             <Share className="w-4 h-4 mr-2" /> Share
           </Button>
-          <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+          <Button
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
+            onClick={() => setShowDownload(true)}
+          >
             <Download className="w-4 h-4 mr-2" /> Export
           </Button>
         </div>
@@ -650,6 +656,24 @@ export default function ProjectWorkspace() {
           </div>
         </div>
       </div>
+
+      {/* Export dialog — processes audio client-side and downloads the mastered file */}
+      <DownloadDialog
+        open={showDownload}
+        onOpenChange={setShowDownload}
+        audioSource={{ type: 'url', url: `${window.location.origin}${project.fileUrl}` }}
+        filename={project.name}
+        eqBands={
+          ((eqPresets?.find((p) => p.id === enhancement?.eqPresetId)?.bands ?? []) as EqBand[])
+        }
+        mastering={{
+          enabled:           mastering?.enabled ?? false,
+          compressionAmount: mastering?.compressionAmount ?? 0,
+          targetLufs:        mastering?.targetLufs ?? -14,
+          exciterAmount:     mastering?.exciterAmount ?? 0,
+          dynamicEqAmount:   mastering?.dynamicEqAmount ?? 0,
+        } satisfies MasteringParams}
+      />
     </div>
   );
 }
