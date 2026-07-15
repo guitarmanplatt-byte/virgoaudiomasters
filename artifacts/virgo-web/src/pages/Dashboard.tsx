@@ -144,6 +144,25 @@ export default function Dashboard() {
     if (file) handleFileChosen(file);
   };
 
+  // ── Element-level drop handlers (belt-and-suspenders) ────────────────────
+  // The document listener handles drops anywhere on the page. These element
+  // handlers catch drops that land directly on the zone and stop them from
+  // bubbling so the document handler doesn't double-fire.
+  const onZoneDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  const onZoneDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setIsDragging(false);
+    const file = e.dataTransfer?.files[0];
+    if (file) handleFileChosen(file);
+  }, [handleFileChosen]);
+
   // ── Upload to workspace (applies EQ preset selection after creation) ─────
   const handleUploadToWorkspace = useCallback(() => {
     if (!previewFile) return;
@@ -227,7 +246,11 @@ export default function Dashboard() {
              * no JavaScript .click() needed, works in all sandboxed iframes.
              * The transparent input also accepts direct file drops in Chrome.
              */
-            <label className="relative flex flex-col items-center justify-center py-16 cursor-pointer select-none">
+            <label
+              className="relative flex flex-col items-center justify-center py-16 cursor-pointer select-none"
+              onDragOver={onZoneDragOver}
+              onDrop={onZoneDrop}
+            >
               <input
                 type="file"
                 className="sr-only"
