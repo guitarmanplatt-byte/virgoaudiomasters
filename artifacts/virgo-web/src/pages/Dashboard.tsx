@@ -42,10 +42,12 @@ export default function Dashboard() {
   const [previewFile, setPreviewFile]       = useState<File | null>(null);
   const [previewBuffer, setPreviewBuffer]   = useState<AudioBuffer | null>(null);
   const [isDecoding, setIsDecoding]         = useState(false);
+  const [decodeError, setDecodeError]       = useState(false);
   const [previewEqId, setPreviewEqId]       = useState<string>('none');
   const [previewGenreId, setPreviewGenreId] = useState<string>('none');
   const [showDownload, setShowDownload]     = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasRef  = useRef<HTMLCanvasElement>(null);
+  const dropRef    = useRef<HTMLDivElement>(null);
 
   // Draw waveform whenever buffer + canvas are ready
   useEffect(() => {
@@ -66,17 +68,20 @@ export default function Dashboard() {
 
   // ── File decode ──────────────────────────────────────────────────────────
   const handleFileChosen = useCallback(async (file: File) => {
+    // Accept the file immediately — show info panel right away
     setPreviewFile(file);
     setPreviewBuffer(null);
+    setDecodeError(false);
     setIsDecoding(true);
     setPreviewEqId('none');
     setPreviewGenreId('none');
     try {
       const buf = await decodeAudioFile(file);
       setPreviewBuffer(buf);
-    } catch {
-      toast.error('Could not read this audio file. Try a different format.');
-      setPreviewFile(null);
+    } catch (err) {
+      console.warn('Waveform decode failed (file will still work):', err);
+      setDecodeError(true);
+      // Do NOT clear previewFile — user can still upload / process
     } finally {
       setIsDecoding(false);
     }
@@ -85,20 +90,38 @@ export default function Dashboard() {
   const clearPreview = useCallback(() => {
     setPreviewFile(null);
     setPreviewBuffer(null);
+    setDecodeError(false);
+    setIsDecoding(false);
     setPreviewEqId('none');
     setPreviewGenreId('none');
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, []);
 
   // ── Drag handlers ────────────────────────────────────────────────────────
-  const handleDragOver  = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
-  const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); };
-  const handleDrop      = (e: React.DragEvent) => {
+  const handleDragOver  = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  // Only clear isDragging when the cursor leaves the entire drop zone,
+  // not when it moves between children inside it.
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!dropRef.current?.contains(e.relatedTarget as Node)) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     setIsDragging(false);
     const file = e.dataTransfer.files[0];
     if (file) handleFileChosen(file);
-  };
+  }, [handleFileChosen]);
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) handleFileChosen(file);
@@ -160,8 +183,8 @@ export default function Dashboard() {
     return `${m}:${sec.toString().padStart(2, '0')}`;
   };
 
-  // ── Whether the drop zone is active (no file chosen yet) ─────────────────
-  const showDropZone = !previewFile && !isDecoding;
+  // Show the empty drop zone only when no file has been accepted yet
+  const showDropZone = !previewFile;
 
   return (
     <div className="p-8 max-w-6xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
@@ -171,57 +194,51 @@ export default function Dashboard() {
       </header>
 
       {/* ── Upload / Preview Area ──────────────────────────────────────────── */}
+      {/*
+        The entire card is the drag target — no <label> wrapping, which
+        misfires dragLeave on every child-element transition.
+      */}
       <Card
+        ref={dropRef}
         className={`border-2 transition-all duration-300 bg-card/50
-          ${previewBuffer ? 'border-primary/40' : 'border-dashed'}
-          ${isDragging ? 'border-primary bg-primary/5' : 'border-border'}
-          ${!previewFile ? 'hover:bg-card/80' : ''}
+          ${previewFile ? 'border-primary/40' : 'border-dashed'}
+          ${isDragging ? 'border-primary bg-primary/5 scale-[1.005]' : 'border-border'}
         `}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
-        <CardContent className="p-0">
+        {/* Hidden file input — opened by the "Select File" button */}
+        <input
+          type="file"
+          className="hidden"
+          accept=".mp3,.wav,.m4a,.flac,.aac,.aiff,.aif,.ogg,.opus,.wma,.webm"
+          ref={fileInputRef}
+          onChange={handleFileSelect}
+        />
 
-          {/* ── Decoding spinner ──────────────────────────────────────────── */}
-          {isDecoding && (
-            <div className="flex flex-col items-center justify-center py-16 gap-4 text-primary">
-              <Loader2 className="w-12 h-12 animate-spin" />
-              <span className="text-lg font-medium">Reading audio file…</span>
-            </div>
-          )}
+        <CardContent className="p-0">
 
           {/* ── Empty drop zone ───────────────────────────────────────────── */}
           {showDropZone && (
-            <label
-              className="flex flex-col items-center justify-center py-16 cursor-pointer"
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-            >
-              <input
-                type="file"
-                className="hidden"
-                accept=".mp3,.wav,.m4a,.flac,.aac,.aiff,.aif,.ogg,.opus,.wma,.webm"
-                ref={fileInputRef}
-                onChange={handleFileSelect}
-              />
+            <div className="flex flex-col items-center justify-center py-16">
               <div className="w-16 h-16 rounded-full bg-background border border-border flex items-center justify-center mb-4">
                 <UploadCloud className="w-8 h-8 text-primary" />
               </div>
               <h3 className="text-xl font-medium text-foreground mb-2">Drag and drop audio file here</h3>
               <p className="text-sm text-muted-foreground mb-6">WAV, FLAC, AIFF, MP3, M4A — up to 2 GB</p>
-              <Button className="font-medium bg-primary text-primary-foreground hover:bg-primary/90">
+              <Button
+                className="font-medium bg-primary text-primary-foreground hover:bg-primary/90"
+                onClick={() => fileInputRef.current?.click()}
+              >
                 <Plus className="w-4 h-4 mr-2" /> Select File
               </Button>
-            </label>
+            </div>
           )}
 
-          {/* ── Waveform preview (file decoded) ───────────────────────────── */}
-          {previewBuffer && previewFile && (
-            <div
-              className="p-6 space-y-5"
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-            >
+          {/* ── File accepted — show info + waveform ──────────────────────── */}
+          {previewFile && (
+            <div className="p-6 space-y-5">
               {/* File info row */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 min-w-0">
@@ -233,9 +250,10 @@ export default function Dashboard() {
                       {previewFile.name}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {fmtDuration(previewBuffer.duration)} &nbsp;·&nbsp;
-                      {previewBuffer.sampleRate / 1000} kHz &nbsp;·&nbsp;
-                      {previewBuffer.numberOfChannels === 1 ? 'Mono' : 'Stereo'}
+                      {previewBuffer
+                        ? <>{fmtDuration(previewBuffer.duration)} &nbsp;·&nbsp; {previewBuffer.sampleRate / 1000} kHz &nbsp;·&nbsp; {previewBuffer.numberOfChannels === 1 ? 'Mono' : 'Stereo'}</>
+                        : <>{(previewFile.size / 1_048_576).toFixed(1)} MB</>
+                      }
                     </p>
                   </div>
                 </div>
@@ -249,14 +267,24 @@ export default function Dashboard() {
                 </Button>
               </div>
 
-              {/* Waveform canvas */}
+              {/* Waveform canvas — spinner while decoding, placeholder on error */}
               <div className="relative rounded-xl overflow-hidden border border-border bg-[hsl(0,0%,5%)]" style={{ height: 140 }}>
+                {isDecoding && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-primary">
+                    <Loader2 className="w-8 h-8 animate-spin" />
+                    <span className="text-xs text-muted-foreground">Analyzing waveform…</span>
+                  </div>
+                )}
+                {decodeError && !isDecoding && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <p className="text-xs text-muted-foreground">Waveform preview unavailable — file will still process normally.</p>
+                  </div>
+                )}
                 <canvas
                   ref={canvasRef}
                   className="w-full h-full"
-                  style={{ display: 'block' }}
+                  style={{ display: previewBuffer ? 'block' : 'none' }}
                 />
-                {/* Subtle spectral overlay */}
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-900/10 via-transparent to-teal-900/10 pointer-events-none" />
               </div>
 
@@ -304,6 +332,7 @@ export default function Dashboard() {
                 <Button
                   variant="outline"
                   className="flex-1 gap-2"
+                  disabled={isDecoding}
                   onClick={() => setShowDownload(true)}
                 >
                   <Download className="w-4 h-4" />
@@ -321,15 +350,6 @@ export default function Dashboard() {
                   )}
                 </Button>
               </div>
-
-              {/* Hidden file input for re-drop */}
-              <input
-                type="file"
-                className="hidden"
-                accept=".mp3,.wav,.m4a,.flac,.aac,.aiff,.aif,.ogg,.opus,.wma,.webm"
-                ref={fileInputRef}
-                onChange={handleFileSelect}
-              />
             </div>
           )}
         </CardContent>
