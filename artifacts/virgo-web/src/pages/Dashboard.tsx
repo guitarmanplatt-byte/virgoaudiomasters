@@ -37,6 +37,8 @@ export default function Dashboard() {
 
   // ── Upload / drop state ─────────────────────────────────────────────────
   const [isDragging, setIsDragging] = useState(false);
+  // Counter instead of bool so entering/leaving nested children doesn't flicker
+  const dragCounterRef = useRef(0);
 
   // ── Waveform preview state ───────────────────────────────────────────────
   const [previewFile, setPreviewFile]       = useState<File | null>(null);
@@ -47,7 +49,6 @@ export default function Dashboard() {
   const [previewGenreId, setPreviewGenreId] = useState<string>('none');
   const [showDownload, setShowDownload]     = useState(false);
   const canvasRef  = useRef<HTMLCanvasElement>(null);
-  const dropRef    = useRef<HTMLDivElement>(null);
 
   // Draw waveform whenever buffer + canvas are ready
   useEffect(() => {
@@ -97,29 +98,50 @@ export default function Dashboard() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, []);
 
-  // ── Drag handlers ────────────────────────────────────────────────────────
-  const handleDragOver  = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  }, []);
+  // ── Document-level drag listeners (works inside Replit's iframe) ─────────
+  // React synthetic events on elements are blocked/unreliable in sandboxed
+  // iframes. Raw document listeners are the only reliable approach.
+  useEffect(() => {
+    const onDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+      // Only react to actual file drags, not element drags
+      if (!e.dataTransfer?.types.includes('Files')) return;
+      dragCounterRef.current += 1;
+      setIsDragging(true);
+    };
 
-  // Only clear isDragging when the cursor leaves the entire drop zone,
-  // not when it moves between children inside it.
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!dropRef.current?.contains(e.relatedTarget as Node)) {
+    const onDragOver = (e: DragEvent) => {
+      e.preventDefault(); // REQUIRED — tells browser a drop is allowed
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    };
+
+    const onDragLeave = (e: DragEvent) => {
+      if (!e.dataTransfer?.types.includes('Files')) return;
+      dragCounterRef.current -= 1;
+      if (dragCounterRef.current <= 0) {
+        dragCounterRef.current = 0;
+        setIsDragging(false);
+      }
+    };
+
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounterRef.current = 0;
       setIsDragging(false);
-    }
-  }, []);
+      const file = e.dataTransfer?.files[0];
+      if (file) handleFileChosen(file);
+    };
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleFileChosen(file);
+    document.addEventListener('dragenter', onDragEnter);
+    document.addEventListener('dragover',  onDragOver);
+    document.addEventListener('dragleave', onDragLeave);
+    document.addEventListener('drop',      onDrop);
+    return () => {
+      document.removeEventListener('dragenter', onDragEnter);
+      document.removeEventListener('dragover',  onDragOver);
+      document.removeEventListener('dragleave', onDragLeave);
+      document.removeEventListener('drop',      onDrop);
+    };
   }, [handleFileChosen]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -194,19 +216,12 @@ export default function Dashboard() {
       </header>
 
       {/* ── Upload / Preview Area ──────────────────────────────────────────── */}
-      {/*
-        The entire card is the drag target — no <label> wrapping, which
-        misfires dragLeave on every child-element transition.
-      */}
+      {/* Drag handling is at document level (useEffect above) — works in iframes */}
       <Card
-        ref={dropRef}
         className={`border-2 transition-all duration-300 bg-card/50
           ${previewFile ? 'border-primary/40' : 'border-dashed'}
           ${isDragging ? 'border-primary bg-primary/5 scale-[1.005]' : 'border-border'}
         `}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
       >
         {/* Hidden file input — opened by the "Select File" button */}
         <input
