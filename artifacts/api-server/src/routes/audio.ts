@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import multer from "multer";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
@@ -71,42 +71,43 @@ const defaultMasteringSettings = {
 };
 
 // POST /audio/upload
+// Uses multer as a standard Express middleware — Express 5 catches any async throws automatically.
+// A dedicated error-handler below converts multer errors (bad MIME type, size limit, etc.) to JSON.
 router.post(
   "/audio/upload",
-  // Run multer and surface its errors as JSON (file-type rejection, size limit, etc.)
-  (req, res, next) => {
-    upload.single("audio")(req, res, (err) => {
-      if (err) {
-        res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
-        return;
-      }
-      next();
-    });
-  },
-  async (req, res): Promise<void> => {
-  if (!req.file) {
-    res.status(400).json({ error: "No audio file provided — make sure the FormData field is named 'audio'" });
-    return;
+  upload.single("audio"),
+  async (req: Request, res: Response): Promise<void> => {
+    if (!req.file) {
+      res.status(400).json({ error: "No audio file provided — make sure the FormData field is named 'audio'" });
+      return;
+    }
+
+    const id = uuidv4();
+    const fileUrl = `/api/audio/file/${req.file.filename}`;
+    const name = path.basename(req.file.originalname, path.extname(req.file.originalname));
+
+    const [project] = await db
+      .insert(audioProjectsTable)
+      .values({
+        id,
+        name,
+        originalFilename: req.file.originalname,
+        fileUrl,
+        status: "ready",
+        enhancementSettings: defaultEnhancementSettings,
+        masteringSettings: defaultMasteringSettings,
+      })
+      .returning();
+
+    res.status(201).json({ ...project, createdAt: project.createdAt.toISOString() });
   }
+);
 
-  const id = uuidv4();
-  const fileUrl = `/api/audio/file/${req.file.filename}`;
-  const name = path.basename(req.file.originalname, path.extname(req.file.originalname));
-
-  const [project] = await db
-    .insert(audioProjectsTable)
-    .values({
-      id,
-      name,
-      originalFilename: req.file.originalname,
-      fileUrl,
-      status: "ready",
-      enhancementSettings: defaultEnhancementSettings,
-      masteringSettings: defaultMasteringSettings,
-    })
-    .returning();
-
-  res.status(201).json(project);
+// Multer error handler — must have 4 parameters for Express to treat it as an error middleware.
+// Catches file-type rejections, size-limit errors, and any other multer throws.
+router.use("/audio/upload", (err: Error, _req: Request, res: Response, _next: NextFunction): void => {
+  console.error("[upload] multer error:", err.message);
+  res.status(400).json({ error: err.message });
 });
 
 // Serve uploaded files
