@@ -178,6 +178,96 @@ paths:
                 items:
                   $ref: "#/components/schemas/EqPreset"
 
+  /plugin-presets:
+    get:
+      operationId: listPluginPresets
+      summary: List user presets, optionally filtered by plugin
+      parameters:
+        - name: pluginId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User plugin presets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PluginPreset"
+    post:
+      operationId: createPluginPreset
+      summary: Save a new user plugin preset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PluginPresetInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PluginPreset"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /plugin-presets/{id}:
+    patch:
+      operationId: updatePluginPreset
+      summary: Rename or update a user plugin preset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PluginPresetUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PluginPreset"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deletePluginPreset
+      summary: Delete a user plugin preset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /genres:
     get:
       operationId: listMasteringGenres
@@ -380,6 +470,53 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/EqBand"
+
+    PluginPreset:
+      type: object
+      required: [id, pluginId, name, params, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        pluginId:
+          type: string
+        name:
+          type: string
+        params:
+          type: object
+          additionalProperties:
+            type: number
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PluginPresetInput:
+      type: object
+      required: [pluginId, name, params]
+      properties:
+        pluginId:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+        params:
+          type: object
+          additionalProperties:
+            type: number
+
+    PluginPresetUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        params:
+          type: object
+          additionalProperties:
+            type: number
 
     MasteringGenre:
       type: object

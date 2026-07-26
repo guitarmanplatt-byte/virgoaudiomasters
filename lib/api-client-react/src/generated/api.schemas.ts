@@ -142,6 +142,35 @@ export interface EqPreset {
   bands: EqBand[];
 }
 
+export type PluginPresetParams = {[key: string]: number};
+
+export interface PluginPreset {
+  id: number;
+  pluginId: string;
+  name: string;
+  params: PluginPresetParams;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PluginPresetInputParams = {[key: string]: number};
+
+export interface PluginPresetInput {
+  /** @minLength 1 */
+  pluginId: string;
+  /** @minLength 1 */
+  name: string;
+  params: PluginPresetInputParams;
+}
+
+export type PluginPresetUpdateParams = {[key: string]: number};
+
+export interface PluginPresetUpdate {
+  /** @minLength 1 */
+  name?: string;
+  params?: PluginPresetUpdateParams;
+}
+
 export interface MasteringGenre {
   id: string;
   name: string;
@@ -152,4 +181,8 @@ export interface MasteringGenre {
   exciterAmount: number;
   character?: string;
 }
+
+export type ListPluginPresetsParams = {
+pluginId?: string;
+};
 

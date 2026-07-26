@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'wouter';
-import { Settings2, Music, ListMusic, Home } from 'lucide-react';
+import { Settings2, ListMusic, Home, Blocks } from 'lucide-react';
 import { ReactNode } from 'react';
 
 export function Shell({ children }: { children: ReactNode }) {
@@ -7,6 +7,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
   const links = [
     { href: '/', label: 'Dashboard', icon: Home },
+    { href: '/plugins', label: 'Plugins', icon: Blocks },
     { href: '/presets', label: 'EQ Presets', icon: Settings2 },
     { href: '/genres', label: 'Mastering Styles', icon: ListMusic },
   ];

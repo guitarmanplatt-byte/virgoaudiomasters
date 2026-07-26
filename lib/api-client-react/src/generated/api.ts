@@ -25,8 +25,12 @@ import type {
   EqPreset,
   ErrorResponse,
   HealthStatus,
+  ListPluginPresetsParams,
   MasteringGenre,
-  MasteringSettingsInput
+  MasteringSettingsInput,
+  PluginPreset,
+  PluginPresetInput,
+  PluginPresetUpdate
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -650,6 +654,304 @@ export function useListEqPresets<TData = Awaited<ReturnType<typeof listEqPresets
 
 
 
+
+export const getListPluginPresetsUrl = (params?: ListPluginPresetsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/plugin-presets?${stringifiedParams}` : `/api/plugin-presets`
+}
+
+/**
+ * @summary List user presets, optionally filtered by plugin
+ */
+export const listPluginPresets = async (params?: ListPluginPresetsParams, options?: RequestInit): Promise<PluginPreset[]> => {
+
+  return customFetch<PluginPreset[]>(getListPluginPresetsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPluginPresetsQueryKey = (params?: ListPluginPresetsParams,) => {
+    return [
+    `/api/plugin-presets`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListPluginPresetsQueryOptions = <TData = Awaited<ReturnType<typeof listPluginPresets>>, TError = ErrorType<unknown>>(params?: ListPluginPresetsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPluginPresets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPluginPresetsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPluginPresets>>> = ({ signal }) => listPluginPresets(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPluginPresets>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPluginPresetsQueryResult = NonNullable<Awaited<ReturnType<typeof listPluginPresets>>>
+export type ListPluginPresetsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List user presets, optionally filtered by plugin
+ */
+
+export function useListPluginPresets<TData = Awaited<ReturnType<typeof listPluginPresets>>, TError = ErrorType<unknown>>(
+ params?: ListPluginPresetsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPluginPresets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPluginPresetsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreatePluginPresetUrl = () => {
+
+
+
+
+  return `/api/plugin-presets`
+}
+
+/**
+ * @summary Save a new user plugin preset
+ */
+export const createPluginPreset = async (pluginPresetInput: PluginPresetInput, options?: RequestInit): Promise<PluginPreset> => {
+
+  return customFetch<PluginPreset>(getCreatePluginPresetUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(pluginPresetInput)
+  }
+);}
+
+
+
+
+
+export const getCreatePluginPresetMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPluginPreset>>, TError,{data: BodyType<PluginPresetInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createPluginPreset>>, TError,{data: BodyType<PluginPresetInput>}, TContext> => {
+
+const mutationKey = ['createPluginPreset'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPluginPreset>>, {data: BodyType<PluginPresetInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createPluginPreset(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreatePluginPresetMutationResult = NonNullable<Awaited<ReturnType<typeof createPluginPreset>>>
+    export type CreatePluginPresetMutationBody = BodyType<PluginPresetInput>
+    export type CreatePluginPresetMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Save a new user plugin preset
+ */
+export const useCreatePluginPreset = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPluginPreset>>, TError,{data: BodyType<PluginPresetInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createPluginPreset>>,
+        TError,
+        {data: BodyType<PluginPresetInput>},
+        TContext
+      > => {
+      return useMutation(getCreatePluginPresetMutationOptions(options));
+    }
+
+export const getUpdatePluginPresetUrl = (id: number,) => {
+
+
+
+
+  return `/api/plugin-presets/${id}`
+}
+
+/**
+ * @summary Rename or update a user plugin preset
+ */
+export const updatePluginPreset = async (id: number,
+    pluginPresetUpdate: PluginPresetUpdate, options?: RequestInit): Promise<PluginPreset> => {
+
+  return customFetch<PluginPreset>(getUpdatePluginPresetUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(pluginPresetUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdatePluginPresetMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePluginPreset>>, TError,{id: number;data: BodyType<PluginPresetUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updatePluginPreset>>, TError,{id: number;data: BodyType<PluginPresetUpdate>}, TContext> => {
+
+const mutationKey = ['updatePluginPreset'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePluginPreset>>, {id: number;data: BodyType<PluginPresetUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updatePluginPreset(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdatePluginPresetMutationResult = NonNullable<Awaited<ReturnType<typeof updatePluginPreset>>>
+    export type UpdatePluginPresetMutationBody = BodyType<PluginPresetUpdate>
+    export type UpdatePluginPresetMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Rename or update a user plugin preset
+ */
+export const useUpdatePluginPreset = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePluginPreset>>, TError,{id: number;data: BodyType<PluginPresetUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updatePluginPreset>>,
+        TError,
+        {id: number;data: BodyType<PluginPresetUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdatePluginPresetMutationOptions(options));
+    }
+
+export const getDeletePluginPresetUrl = (id: number,) => {
+
+
+
+
+  return `/api/plugin-presets/${id}`
+}
+
+/**
+ * @summary Delete a user plugin preset
+ */
+export const deletePluginPreset = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeletePluginPresetUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeletePluginPresetMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePluginPreset>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deletePluginPreset>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deletePluginPreset'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deletePluginPreset>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deletePluginPreset(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeletePluginPresetMutationResult = NonNullable<Awaited<ReturnType<typeof deletePluginPreset>>>
+
+    export type DeletePluginPresetMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Delete a user plugin preset
+ */
+export const useDeletePluginPreset = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePluginPreset>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deletePluginPreset>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeletePluginPresetMutationOptions(options));
+    }
 
 export const getListMasteringGenresUrl = () => {
 

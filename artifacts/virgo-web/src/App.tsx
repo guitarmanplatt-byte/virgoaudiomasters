@@ -10,6 +10,8 @@ import Dashboard from '@/pages/Dashboard';
 import ProjectWorkspace from '@/pages/ProjectWorkspace';
 import PresetsBrowser from '@/pages/PresetsBrowser';
 import GenresBrowser from '@/pages/GenresBrowser';
+import PluginsHub from '@/pages/PluginsHub';
+import PluginHost from '@/pages/PluginHost';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,6 +29,8 @@ function AppRouter() {
         <Route path="/project/:id" component={ProjectWorkspace} />
         <Route path="/presets" component={PresetsBrowser} />
         <Route path="/genres" component={GenresBrowser} />
+        <Route path="/plugins" component={PluginsHub} />
+        <Route path="/plugins/:pluginId" component={PluginHost} />
         <Route component={NotFound} />
       </Switch>
     </Shell>

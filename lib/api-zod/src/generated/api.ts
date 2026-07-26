@@ -265,6 +265,82 @@ export const ListEqPresetsResponse = zod.array(ListEqPresetsResponseItem)
 
 
 /**
+ * @summary List user presets, optionally filtered by plugin
+ */
+export const ListPluginPresetsQueryParams = zod.object({
+  "pluginId": zod.coerce.string().optional()
+})
+
+export const ListPluginPresetsResponseItem = zod.object({
+  "id": zod.number(),
+  "pluginId": zod.string(),
+  "name": zod.string(),
+  "params": zod.record(zod.string(), zod.number()),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListPluginPresetsResponse = zod.array(ListPluginPresetsResponseItem)
+
+
+/**
+ * @summary Save a new user plugin preset
+ */
+
+
+
+
+export const CreatePluginPresetBody = zod.object({
+  "pluginId": zod.string().min(1),
+  "name": zod.string().min(1),
+  "params": zod.record(zod.string(), zod.number())
+})
+
+export const CreatePluginPresetResponse = zod.object({
+  "id": zod.number(),
+  "pluginId": zod.string(),
+  "name": zod.string(),
+  "params": zod.record(zod.string(), zod.number()),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Rename or update a user plugin preset
+ */
+export const UpdatePluginPresetParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const UpdatePluginPresetBody = zod.object({
+  "name": zod.string().min(1).optional(),
+  "params": zod.record(zod.string(), zod.number()).optional()
+})
+
+export const UpdatePluginPresetResponse = zod.object({
+  "id": zod.number(),
+  "pluginId": zod.string(),
+  "name": zod.string(),
+  "params": zod.record(zod.string(), zod.number()),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a user plugin preset
+ */
+export const DeletePluginPresetParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeletePluginPresetResponse = zod.void()
+
+
+/**
  * @summary List mastering genre styles
  */
 export const ListMasteringGenresResponseItem = zod.object({
