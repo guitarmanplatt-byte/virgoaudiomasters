@@ -7,8 +7,10 @@
     "predev": "pnpm run build:libs",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "build:libs": "pnpm --filter @workspace/api-zod --filter @workspace/api-client-react --filter @workspace/db run build",
+    "clean:libs": "node -e \"const fs=require('fs');['lib/api-zod','lib/api-client-react','lib/db'].forEach(p=>{fs.rmSync(p+'/dist',{recursive:true,force:true});['tsconfig.tsbuildinfo','tsconfig.json.tsbuildinfo'].forEach(f=>{try{fs.unlinkSync(p+'/'+f)}catch{}})});['tsconfig.tsbuildinfo'].forEach(f=>{try{fs.unlinkSync(f)}catch{}})\"",
     "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
+    "validate:libs": "pnpm run clean:libs && pnpm run build:libs && pnpm run typecheck:libs"
   },
   "private": true,
   "dependencies": {
