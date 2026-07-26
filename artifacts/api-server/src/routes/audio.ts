@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import multer from "multer";
+import rateLimit from "express-rate-limit";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import fs from "fs";
@@ -35,6 +36,23 @@ function withUploadTimeout(req: Request, res: Response, next: NextFunction): voi
 
   next();
 }
+
+// ---------------------------------------------------------------------------
+// Upload rate limiter
+// Default: 10 requests per minute per IP. Override with UPLOAD_RATE_LIMIT_PER_MINUTE.
+// ---------------------------------------------------------------------------
+function buildUploadRateLimiter() {
+  const max = parseInt(process.env["UPLOAD_RATE_LIMIT_PER_MINUTE"] ?? "10", 10);
+  return rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many upload requests from this IP, please try again later." },
+  });
+}
+
+const uploadRateLimiter = buildUploadRateLimiter();
 
 const router: IRouter = Router();
 
@@ -107,6 +125,7 @@ const defaultMasteringSettings = {
 // begins reading the request body.
 router.post(
   "/audio/upload",
+  uploadRateLimiter,
   withUploadTimeout,
   upload.single("audio"),
   async (req: Request, res: Response): Promise<void> => {
