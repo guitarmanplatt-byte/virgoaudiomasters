@@ -26,3 +26,6 @@ jobs:
 
       - name: Validate lib declarations
         run: pnpm run validate:libs
+
+      - name: Typecheck all artifacts
+        run: pnpm run typecheck
