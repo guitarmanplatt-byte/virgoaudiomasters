@@ -6,6 +6,36 @@ import fs from "fs";
 import { db, audioProjectsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
+// ---------------------------------------------------------------------------
+// Upload timeout guard
+// Default: 5 minutes. Override with UPLOAD_TIMEOUT_MS environment variable.
+//
+// Uses a true wall-clock setTimeout (not req.setTimeout / socket idle timeout).
+// req.setTimeout only fires when the socket is *idle*; a trickle client that
+// sends tiny bytes periodically can reset an idle timer indefinitely. A
+// wall-clock timer fires unconditionally after the configured duration,
+// regardless of how much data has arrived.
+// ---------------------------------------------------------------------------
+function withUploadTimeout(req: Request, res: Response, next: NextFunction): void {
+  // Read the env var at request time so tests can override it without
+  // reloading the module.
+  const ms = parseInt(process.env["UPLOAD_TIMEOUT_MS"] ?? "300000", 10);
+
+  const timer = setTimeout(() => {
+    if (!res.headersSent) {
+      res.status(408).json({ error: "Upload timeout: the request took too long. Please try again." });
+    }
+    // Forcibly close the socket so the trickle client is evicted.
+    req.socket?.destroy();
+  }, ms);
+
+  // Clear the deadline if the response finishes before the timer fires.
+  res.on("finish", () => clearTimeout(timer));
+  res.on("close", () => clearTimeout(timer));
+
+  next();
+}
+
 const router: IRouter = Router();
 
 // Ensure uploads directory exists
@@ -73,8 +103,11 @@ const defaultMasteringSettings = {
 // POST /audio/upload
 // Uses multer as a standard Express middleware — Express 5 catches any async throws automatically.
 // A dedicated error-handler below converts multer errors (bad MIME type, size limit, etc.) to JSON.
+// withUploadTimeout must come first so the socket deadline is set before multer
+// begins reading the request body.
 router.post(
   "/audio/upload",
+  withUploadTimeout,
   upload.single("audio"),
   async (req: Request, res: Response): Promise<void> => {
     if (!req.file) {

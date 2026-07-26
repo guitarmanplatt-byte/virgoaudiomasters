@@ -4,6 +4,7 @@
  * static-data routes; the DB is mocked for plugin-presets and audio routes).
  */
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
+import http from "http";
 import request from "supertest";
 import fs from "fs";
 
@@ -228,6 +229,74 @@ describe("DELETE /api/audio/:id", () => {
     expect(res.status).toBe(404);
     expect(res.body).toHaveProperty("error");
   });
+});
+
+// ---------------------------------------------------------------------------
+// Upload wall-clock timeout (real TCP server — supertest cannot control chunk timing)
+// ---------------------------------------------------------------------------
+describe("POST /api/audio/upload — wall-clock timeout", () => {
+  it("returns 408 when a trickle upload exceeds the deadline", async () => {
+    // Use a tiny timeout so this test completes quickly.
+    process.env["UPLOAD_TIMEOUT_MS"] = "300";
+
+    const server = http.createServer(app);
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const { port } = server.address() as { port: number };
+
+    try {
+      const statusCode = await new Promise<number>((resolve, reject) => {
+        const boundary = "----ViTestBoundary";
+        // Multipart preamble — tells the server a file upload is starting.
+        const preamble = `--${boundary}\r\nContent-Disposition: form-data; name="audio"; filename="slow.wav"\r\nContent-Type: audio/wav\r\n\r\n`;
+
+        const req = http.request(
+          {
+            hostname: "127.0.0.1",
+            port,
+            method: "POST",
+            path: "/api/audio/upload",
+            headers: {
+              "Content-Type": `multipart/form-data; boundary=${boundary}`,
+              "Transfer-Encoding": "chunked",
+            },
+          },
+          (res) => {
+            resolve(res.statusCode ?? 0);
+            res.resume(); // drain so the socket can close
+          },
+        );
+
+        req.on("error", (err) => {
+          // Socket destroyed by the server — treat as a completed timeout.
+          if ((err as NodeJS.ErrnoException).code === "ECONNRESET") {
+            resolve(408);
+          } else {
+            reject(err);
+          }
+        });
+
+        // Send the preamble immediately, then stall for 500 ms (> 300 ms deadline).
+        // A real trickle client would periodically drip tiny bytes; this simulates
+        // the worst case where no additional bytes arrive before the deadline.
+        req.write(preamble);
+        setTimeout(() => {
+          // This fires after the server should have already timed out.
+          // The write/end may fail if the socket is already destroyed — that's fine.
+          try {
+            req.write(Buffer.alloc(4, 0));
+            req.end(`\r\n--${boundary}--\r\n`);
+          } catch {
+            /* socket already gone */
+          }
+        }, 500);
+      });
+
+      expect(statusCode).toBe(408);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      delete process.env["UPLOAD_TIMEOUT_MS"];
+    }
+  }, 10_000); // generous real-time budget
 });
 
 // ---------------------------------------------------------------------------
