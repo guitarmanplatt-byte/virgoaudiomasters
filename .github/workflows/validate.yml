@@ -29,3 +29,6 @@ jobs:
 
       - name: Typecheck all artifacts
         run: pnpm run typecheck
+
+      - name: Smoke-test API server
+        run: pnpm --filter @workspace/api-server run test
