@@ -1,4 +1,11 @@
 import type { PluginDefinition } from '@/lib/plugin-engine/types';
+import { dynamicEq } from './mastering/dynamic-eq';
+import { compressor } from './mastering/compressor';
+import { limiter } from './mastering/limiter';
+import { exciter } from './mastering/exciter';
+import { imager } from './mastering/imager';
+import { lowEndFocus } from './mastering/low-end-focus';
+import { clarity } from './mastering/clarity';
 
 /**
  * Central plugin registry. Modules from the mastering & restoration suites
@@ -78,14 +85,14 @@ const registry: PluginDefinition[] = [
     ],
   },
 
-  // ── Mastering suite slots (implemented in a later task) ──────────────────
-  { id: 'eq-master', name: 'VA Equalizer', category: 'mastering', tagline: '8-band parametric EQ', description: 'Surgical and musical parametric equalizer with draggable band nodes and analog curve modes.', available: false, params: [], factoryPresets: [] },
-  { id: 'dynamics', name: 'VA Dynamics', category: 'mastering', tagline: 'Multiband compressor', description: 'Program-dependent multiband compression with auto-release and parallel mix.', available: false, params: [], factoryPresets: [] },
-  { id: 'exciter', name: 'VA Exciter', category: 'mastering', tagline: 'Harmonic saturation', description: 'Multi-mode harmonic exciter: tube, tape, retro and warm circuits per band.', available: false, params: [], factoryPresets: [] },
-  { id: 'imager', name: 'VA Imager', category: 'mastering', tagline: 'Stereo imaging', description: 'Multiband stereo width with vectorscope and mono-compatibility metering.', available: false, params: [], factoryPresets: [] },
-  { id: 'maximizer', name: 'VA Maximizer', category: 'mastering', tagline: 'Loudness maximizer', description: 'Transparent look-ahead limiting with LUFS targeting and true-peak ceiling.', available: false, params: [], factoryPresets: [] },
-  { id: 'low-end', name: 'VA Low End Focus', category: 'mastering', tagline: 'Bass clarity', description: 'Punch and contrast control for the critical low-frequency band.', available: false, params: [], factoryPresets: [] },
-  { id: 'vintage-tape', name: 'VA Vintage Tape', category: 'mastering', tagline: 'Tape emulation', description: 'Classic tape machine tone: wow, flutter, head bump and soft saturation.', available: false, params: [], factoryPresets: [] },
+  // ── Mastering suite ───────────────────────────────────────────────────────
+  dynamicEq,
+  compressor,
+  limiter,
+  exciter,
+  imager,
+  lowEndFocus,
+  clarity,
 
   // ── Restoration suite slots (implemented in a later task) ────────────────
   { id: 'de-noise', name: 'VA De-noise', category: 'restoration', tagline: 'Broadband noise removal', description: 'Spectral noise reduction with learnable noise profiles.', available: false, params: [], factoryPresets: [] },

@@ -30,6 +30,9 @@ export interface PluginUIProps {
   analyser: AnalyserNode | null;
   /** AnalyserNode tapped pre-processing. Null until audio is loaded. */
   inputAnalyser: AnalyserNode | null;
+  /** Per-channel post-processing analysers for stereo visualizations. */
+  analyserL?: AnalyserNode | null;
+  analyserR?: AnalyserNode | null;
   definition: PluginDefinition;
 }
 

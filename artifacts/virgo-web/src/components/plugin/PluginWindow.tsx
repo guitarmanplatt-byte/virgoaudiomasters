@@ -373,6 +373,8 @@ export function PluginWindow({ definition }: PluginWindowProps) {
               setParam={setParam}
               analyser={engine.outputAnalyser}
               inputAnalyser={engine.inputAnalyser}
+              analyserL={engine.outputAnalyserL}
+              analyserR={engine.outputAnalyserR}
               definition={definition}
             />
           ) : (

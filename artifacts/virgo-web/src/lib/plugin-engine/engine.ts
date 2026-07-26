@@ -26,6 +26,10 @@ export class PluginAudioEngine {
   private outputGain: GainNode | null = null;
   inputAnalyser: AnalyserNode | null = null;
   outputAnalyser: AnalyserNode | null = null;
+  /** Per-channel output analysers (L/R) for stereo visualizations. */
+  outputAnalyserL: AnalyserNode | null = null;
+  outputAnalyserR: AnalyserNode | null = null;
+  private splitter: ChannelSplitterNode | null = null;
 
   private kernelCode: string;
   private params: Record<string, number>;
@@ -131,6 +135,16 @@ export class PluginAudioEngine {
     }
     this.outputGain.connect(this.outputAnalyser);
     this.outputAnalyser.connect(ctx.destination);
+
+    // Stereo tap for vectorscope/correlation visualizations
+    this.splitter = ctx.createChannelSplitter(2);
+    this.outputAnalyserL = ctx.createAnalyser();
+    this.outputAnalyserL.fftSize = 2048;
+    this.outputAnalyserR = ctx.createAnalyser();
+    this.outputAnalyserR.fftSize = 2048;
+    this.outputGain.connect(this.splitter);
+    this.splitter.connect(this.outputAnalyserL, 0);
+    this.splitter.connect(this.outputAnalyserR, 1);
 
     this.ctx = ctx;
   }
@@ -299,6 +313,9 @@ export class PluginAudioEngine {
     this.outputGain = null;
     this.inputAnalyser = null;
     this.outputAnalyser = null;
+    this.outputAnalyserL = null;
+    this.outputAnalyserR = null;
+    this.splitter = null;
     this.buffer = null;
   }
 }
