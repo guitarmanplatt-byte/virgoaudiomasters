@@ -6,6 +6,7 @@ import { exciter } from './mastering/exciter';
 import { imager } from './mastering/imager';
 import { lowEndFocus } from './mastering/low-end-focus';
 import { clarity } from './mastering/clarity';
+import { vintageTape } from './mastering/vintage-tape';
 
 /**
  * Central plugin registry. Modules from the mastering & restoration suites
@@ -93,6 +94,7 @@ const registry: PluginDefinition[] = [
   imager,
   lowEndFocus,
   clarity,
+  vintageTape,
 
   // ── Restoration suite slots (implemented in a later task) ────────────────
   { id: 'de-noise', name: 'VA De-noise', category: 'restoration', tagline: 'Broadband noise removal', description: 'Spectral noise reduction with learnable noise profiles.', available: false, params: [], factoryPresets: [] },
