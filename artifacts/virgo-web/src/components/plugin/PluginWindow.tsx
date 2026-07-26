@@ -10,7 +10,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Play, Pause, Square, Repeat, UploadCloud, Download, Loader2,
-  Power, ChevronDown, Save, Trash2, Pencil, Check, X,
+  Power, ChevronDown, Save, Trash2, Pencil, Check, X, Sparkles,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
@@ -146,6 +146,34 @@ export function PluginWindow({ definition }: PluginWindowProps) {
     } catch (err) {
       console.error('[plugin] load failed', err);
       toast.error('Could not decode this audio file.');
+    }
+  };
+
+  const loadDemo = async () => {
+    if (!definition.demoClip) return;
+    try {
+      // definition.demoClip is a root-relative path like "/demos/de-noise.wav".
+      // Strip the leading slash and prepend Vite's BASE_URL so the fetch works
+      // regardless of the app's deployment sub-path.
+      const clipPath = definition.demoClip.replace(/^\//, '');
+      const url = `${import.meta.env.BASE_URL}${clipPath}`;
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const blob = await resp.blob();
+      const name = definition.demoClip.split('/').pop() ?? 'demo.wav';
+      const file = new File([blob], name, { type: blob.type || 'audio/wav' });
+      await handleFile(file);
+      // Auto-play so the effect is immediately audible
+      try {
+        await engine.play();
+        setIsPlaying(true);
+        setAudioReady(true);
+      } catch {
+        // play() failed (e.g. user gesture required) — audio is loaded, user can press play
+      }
+    } catch (err) {
+      console.error('[plugin] demo load failed', err);
+      toast.error('Could not load demo clip.');
     }
   };
 
@@ -431,6 +459,19 @@ export function PluginWindow({ definition }: PluginWindowProps) {
           <UploadCloud className="w-4 h-4" />
           {fileName ? <span className="max-w-[140px] truncate">{fileName}</span> : 'Load Audio'}
         </Button>
+
+        {!fileName && definition.demoClip && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 border-[#E8A030]/40 bg-[#E8A030]/8 text-[#E8A030] hover:border-[#E8A030]/70 hover:bg-[#E8A030]/15"
+            onClick={loadDemo}
+            title="Load a built-in demo clip to hear the plugin in action"
+          >
+            <Sparkles className="w-4 h-4" />
+            Try demo
+          </Button>
+        )}
 
         <div className="flex items-center gap-1">
           <Button size="icon" variant="ghost" className="h-8 w-8" disabled={!fileName} onClick={togglePlay}>

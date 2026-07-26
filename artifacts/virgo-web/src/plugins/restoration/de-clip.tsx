@@ -184,4 +184,5 @@ registerPlugin({
     { name: 'Broadcast Safe',  params: { threshold: 0.90, recovery: 2.0, ceiling: 0.93, mix: 1.0 } },
   ],
   Controls: DeClipControls,
+  demoClip: '/demos/de-clip.wav',
 });

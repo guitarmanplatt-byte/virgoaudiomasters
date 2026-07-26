@@ -112,4 +112,5 @@ registerPlugin({
     { name: 'Wind Noise',     params: { sensitivity: 0.4,  crossover: 80,  attenuation: 0.6,  release: 80  } },
     { name: 'Hard Knock',     params: { sensitivity: 0.8,  crossover: 150, attenuation: 0.9,  release: 20  } },
   ],
+  demoClip: '/demos/de-plosive.wav',
 });

@@ -50,6 +50,13 @@ export interface PluginDefinition {
   factoryPresets: FactoryPreset[];
   /** Custom central UI. If omitted, a generic knob panel + spectrum is rendered. */
   Controls?: ComponentType<PluginUIProps>;
+  /**
+   * Path (relative to the app's public root) to a short demo audio clip that
+   * showcases the artifact type of noise/distortion this plugin corrects.
+   * When present, a "Try demo" button appears in PluginWindow before any file
+   * is loaded.
+   */
+  demoClip?: string;
 }
 
 export function defaultParams(def: PluginDefinition): Record<string, number> {

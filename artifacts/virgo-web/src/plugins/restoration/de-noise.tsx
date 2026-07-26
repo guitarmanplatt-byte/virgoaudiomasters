@@ -221,4 +221,5 @@ registerPlugin({
     { name: 'Aggressive',    params: { threshold: 24, reduction: 1.0,  release: 80,  learn: 0.03  } },
   ],
   Controls: DeNoiseControls,
+  demoClip: '/demos/de-noise.wav',
 });

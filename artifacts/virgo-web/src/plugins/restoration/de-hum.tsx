@@ -217,4 +217,5 @@ registerPlugin({
     { name: 'Narrow 50 Hz',   params: { frequency: 0, harmonics: 4, Q: 80, depth: 1.0, mix: 1.0 } },
   ],
   Controls: DeHumControls,
+  demoClip: '/demos/de-hum.wav',
 });

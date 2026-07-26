@@ -95,4 +95,5 @@ registerPlugin({
     { name: 'Vinyl Heavy',  params: { threshold: 0.08,  repair: 0.9, window: 3, mix: 1.0 } },
     { name: 'Shellac 78',   params: { threshold: 0.12,  repair: 1.0, window: 4, mix: 1.0 } },
   ],
+  demoClip: '/demos/de-crackle.wav',
 });

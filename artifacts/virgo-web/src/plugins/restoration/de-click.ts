@@ -112,4 +112,5 @@ registerPlugin({
     { name: 'Digital Dropout', params: { sensitivity: 0.9,  width: 10, mix: 1.0 } },
     { name: 'Light Touch',     params: { sensitivity: 0.3,  width: 3,  mix: 0.8 } },
   ],
+  demoClip: '/demos/de-click.wav',
 });
