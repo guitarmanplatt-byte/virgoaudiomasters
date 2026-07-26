@@ -1,0 +1,5 @@
+# Uploaded audio files — runtime data, not source code
+uploads/
+
+# Build output
+dist/
