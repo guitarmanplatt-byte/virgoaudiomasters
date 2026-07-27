@@ -6,6 +6,11 @@ import { logger } from "./lib/logger";
 
 const app: Express = express();
 
+// Trust the first proxy hop so that req.ip reflects the real client IP from
+// X-Forwarded-For.  Required for per-IP rate limiting to work correctly when
+// the server runs behind a reverse proxy (nginx, Replit's edge, load balancer).
+app.set("trust proxy", 1);
+
 app.use(
   pinoHttp({
     logger,

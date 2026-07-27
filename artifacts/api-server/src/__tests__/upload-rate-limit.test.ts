@@ -76,6 +76,18 @@ async function postUpload(app: Express) {
     .attach("audio", wavBuffer, { filename: "clip.wav", contentType: "audio/wav" });
 }
 
+/**
+ * POST a single audio upload spoofing a specific client IP via X-Forwarded-For.
+ * Works because app.ts sets `trust proxy = 1`, so Express promotes the first
+ * X-Forwarded-For value to req.ip — the key used by express-rate-limit.
+ */
+async function postUploadFromIp(app: Express, ip: string) {
+  return request(app)
+    .post("/api/audio/upload")
+    .set("X-Forwarded-For", ip)
+    .attach("audio", wavBuffer, { filename: "clip.wav", contentType: "audio/wav" });
+}
+
 // ---------------------------------------------------------------------------
 // Import app AFTER env var and mocks are in place.
 // ---------------------------------------------------------------------------
@@ -130,5 +142,47 @@ describe("Upload rate limiter", () => {
     // express-rate-limit emits RateLimit-* headers when standardHeaders:true
     expect(res.headers).toHaveProperty("ratelimit-limit");
     expect(res.headers).toHaveProperty("ratelimit-remaining");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Per-IP isolation: exhausting one IP's quota must not affect another IP
+// ---------------------------------------------------------------------------
+describe("Upload rate limiter — per-IP isolation", () => {
+  /**
+   * app.ts sets `trust proxy = 1`, so Express reads the real client IP from
+   * the first X-Forwarded-For value and express-rate-limit keys on that IP.
+   * This suite verifies that a blocked IP-A does not affect IP-B.
+   *
+   * We use distinct, non-loopback addresses (10.0.0.1 / 10.0.0.2) so they
+   * don't collide with the unforwarded supertest IP (127.0.0.1 / ::1) used
+   * by the "Upload rate limiter" suite above.
+   */
+
+  it("trust proxy: X-Forwarded-For is reflected in rate-limit key", async () => {
+    // First request from IP-A must succeed (fresh counter for this IP).
+    const res = await postUploadFromIp(app, "10.0.0.1");
+    expect(res.status).toBe(201);
+  });
+
+  it("IP-A becomes rate-limited after exhausting its quota", async () => {
+    // Consume the remaining quota for 10.0.0.1 (one request was used above).
+    const res = await postUploadFromIp(app, "10.0.0.1");
+    expect(res.status).toBe(201);
+
+    // Next request from IP-A must be rate-limited.
+    const blocked = await postUploadFromIp(app, "10.0.0.1");
+    expect(blocked.status).toBe(429);
+  });
+
+  it("IP-B is unaffected while IP-A is rate-limited", async () => {
+    // IP-A is already exhausted from the previous test.
+    // Confirm IP-A is still blocked.
+    const ipARes = await postUploadFromIp(app, "10.0.0.1");
+    expect(ipARes.status).toBe(429);
+
+    // IP-B (10.0.0.2) has its own fresh counter — must still return 201.
+    const ipBRes = await postUploadFromIp(app, "10.0.0.2");
+    expect(ipBRes.status).toBe(201);
   });
 });
