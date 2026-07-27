@@ -2,10 +2,11 @@
  * VA Exciter — multiband harmonic saturation with selectable transfer curves
  * (Warm / Tape / Tube / Retro) and per-band amount and mix.
  */
+import { useMemo } from 'react';
 import type { PluginDefinition, PluginUIProps } from '@/lib/plugin-engine/types';
 import { Knob } from '@/components/plugin/Knob';
 import { SpectrumAnalyzer } from '@/components/plugin/SpectrumAnalyzer';
-import { BIQUAD_HELPERS, fmtHz, fmtPct } from './kernel-utils';
+import { BIQUAD_HELPERS, biquadMagnitudeDb, fmtHz, fmtPct } from './kernel-utils';
 
 const MODES = ['Warm', 'Tape', 'Tube', 'Retro'];
 
@@ -90,6 +91,27 @@ ${BIQUAD_HELPERS}
 function Controls({ params, setParam, analyser, inputAnalyser }: PluginUIProps) {
   const mode = Math.round(params.mode ?? 0);
 
+  // Represent harmonic emphasis as a composite EQ overlay:
+  // low shelf at xLow (amtLow emphasis), peaking at the geometric mid (amtMid),
+  // and high shelf at xHigh (amtHigh emphasis). Each amount scales a ±6 dB band.
+  const eqCurve = useMemo(() => {
+    const xLow    = (params.xLow    as number) ?? 200;
+    const xHigh   = (params.xHigh   as number) ?? 3000;
+    const amtLow  = (params.amtLow  as number) ?? 0;
+    const amtMid  = (params.amtMid  as number) ?? 0;
+    const amtHigh = (params.amtHigh as number) ?? 0;
+    const mixLow  = (params.mixLow  as number) ?? 1;
+    const mixMid  = (params.mixMid  as number) ?? 1;
+    const mixHigh = (params.mixHigh as number) ?? 1;
+    const trim    = (params.trim    as number) ?? 0;
+    const midFreq = Math.sqrt(xLow * xHigh);
+    return (f: number) =>
+      biquadMagnitudeDb('lowshelf',  xLow,    amtLow  * mixLow  * 6, 0.707, f) +
+      biquadMagnitudeDb('peaking',   midFreq, amtMid  * mixMid  * 6, 1.0,   f) +
+      biquadMagnitudeDb('highshelf', xHigh,   amtHigh * mixHigh * 6, 0.707, f) +
+      trim;
+  }, [params.xLow, params.xHigh, params.amtLow, params.mixLow, params.amtMid, params.mixMid, params.amtHigh, params.mixHigh, params.trim]);
+
   const band = (label: string, amtId: string, mixId: string) => (
     <div className="flex flex-col items-center gap-3 rounded-md border border-[#242424] bg-[#111] px-5 py-4 flex-1 min-w-[150px]">
       <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</span>
@@ -102,7 +124,7 @@ function Controls({ params, setParam, analyser, inputAnalyser }: PluginUIProps) 
 
   return (
     <div className="space-y-4">
-      <SpectrumAnalyzer analyser={analyser} referenceAnalyser={inputAnalyser} height={180} />
+      <SpectrumAnalyzer analyser={analyser} referenceAnalyser={inputAnalyser} eqCurve={eqCurve} height={180} />
 
       {/* Mode selector */}
       <div className="flex items-center justify-center gap-2">

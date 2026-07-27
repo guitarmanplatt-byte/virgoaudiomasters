@@ -3,8 +3,11 @@
  * is pushed toward punchy (transient emphasis / upward contrast) or smooth
  * (compressed, rounded) with gain and mix, to tighten bass.
  */
-import type { PluginDefinition } from '@/lib/plugin-engine/types';
-import { fmtHz, fmtPct, BIQUAD_HELPERS } from './kernel-utils';
+import { useMemo } from 'react';
+import type { PluginDefinition, PluginUIProps } from '@/lib/plugin-engine/types';
+import { Knob } from '@/components/plugin/Knob';
+import { SpectrumAnalyzer } from '@/components/plugin/SpectrumAnalyzer';
+import { fmtHz, fmtPct, BIQUAD_HELPERS, biquadMagnitudeDb } from './kernel-utils';
 
 const KERNEL = `
 (sampleRate) => {
@@ -81,6 +84,66 @@ ${BIQUAD_HELPERS}
 }
 `;
 
+function Controls({ params, setParam, analyser, inputAnalyser }: PluginUIProps) {
+  const xover    = (params.xover    as number) ?? 120;
+  const gain     = (params.gain     as number) ?? 0;
+  const contrast = (params.contrast as number) ?? 0;
+  const mix      = (params.mix      as number) ?? 1;
+
+  // Approximate the LR4 crossover + gain effect as a lowshelf at the crossover
+  // frequency. The shelf gain is scaled by mix so the curve tracks the blend.
+  const eqCurve = useMemo(() => {
+    const effectiveGain = gain * mix;
+    return (f: number) =>
+      biquadMagnitudeDb('lowshelf', xover, effectiveGain, 0.707, f);
+  }, [xover, gain, mix]);
+
+  const contrastLabel =
+    Math.abs(contrast) < 0.02
+      ? 'Neutral'
+      : contrast > 0
+        ? `Punchy ${Math.round(contrast * 100)}%`
+        : `Smooth ${Math.round(-contrast * 100)}%`;
+
+  return (
+    <div className="space-y-4">
+      <SpectrumAnalyzer analyser={analyser} referenceAnalyser={inputAnalyser} eqCurve={eqCurve} height={180} />
+
+      <div className="flex flex-wrap items-end justify-center gap-x-8 gap-y-4 rounded-md border border-[#242424] bg-[#111] p-4">
+        <Knob
+          label="Crossover"
+          value={xover}
+          min={50} max={400} defaultValue={120}
+          log
+          format={fmtHz}
+          onChange={(v) => setParam('xover', v)}
+        />
+        <Knob
+          label="Contrast"
+          value={contrast}
+          min={-1} max={1} defaultValue={0}
+          format={() => contrastLabel}
+          onChange={(v) => setParam('contrast', v)}
+        />
+        <Knob
+          label="Low Gain"
+          value={gain}
+          min={-12} max={12} defaultValue={0}
+          format={(v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} dB`}
+          onChange={(v) => setParam('gain', v)}
+        />
+        <Knob
+          label="Mix"
+          value={mix}
+          min={0} max={1} defaultValue={1}
+          format={fmtPct}
+          onChange={(v) => setParam('mix', v)}
+        />
+      </div>
+    </div>
+  );
+}
+
 export const lowEndFocus: PluginDefinition = {
   id: 'low-end',
   name: 'VA Low End Focus',
@@ -89,6 +152,7 @@ export const lowEndFocus: PluginDefinition = {
   description: 'Tightens the critical low-frequency band: dial the contrast toward Punchy for transient emphasis or Smooth for rounded, compressed bass, with crossover, gain and parallel mix.',
   available: true,
   kernelCode: KERNEL,
+  Controls,
   params: [
     { id: 'xover', label: 'Crossover', min: 50, max: 400, default: 120, scale: 'log', format: fmtHz },
     { id: 'contrast', label: 'Contrast', min: -1, max: 1, default: 0, format: (v) => (Math.abs(v) < 0.02 ? 'Neutral' : v > 0 ? `Punchy ${Math.round(v * 100)}%` : `Smooth ${Math.round(-v * 100)}%`) },
