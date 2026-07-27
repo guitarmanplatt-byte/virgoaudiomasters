@@ -239,4 +239,5 @@ export const compressor: PluginDefinition = {
     { name: 'Drum Bus Smash', params: { threshold: -22, ratio: 10, knee: 3, attack: 5, release: 80, makeup: 6, mix: 0.6, autoRelease: 0 } },
     { name: 'Warm Tape Squeeze', params: { threshold: -19, ratio: 2.5, knee: 14, attack: 15, release: 400, makeup: 2, mix: 0.85, autoRelease: 1 } },
   ],
+  demoClip: '/demos/mastering-generic.wav',
 };

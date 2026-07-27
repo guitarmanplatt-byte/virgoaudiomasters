@@ -353,4 +353,5 @@ export const vintageTape: PluginDefinition = {
       params: { saturation: 0.2, bumpFreq: 75, bumpGain: 2.0, rolloffFreq: 15000, wow: 0, flutter: 0, mix: 1, trim: 0 },
     },
   ],
+  demoClip: '/demos/mastering-generic.wav',
 };

@@ -100,4 +100,5 @@ export const clarity: PluginDefinition = {
     { name: 'Subtle Master Polish', params: { amount: 0.25, speed: 0.3, freq: 7000, mix: 0.8 } },
     { name: 'Podcast Crisp', params: { amount: 0.65, speed: 0.75, freq: 4500, mix: 1 } },
   ],
+  demoClip: '/demos/mastering-generic.wav',
 };

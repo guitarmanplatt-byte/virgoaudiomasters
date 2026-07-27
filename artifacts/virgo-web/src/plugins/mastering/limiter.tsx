@@ -192,4 +192,5 @@ export const limiter: PluginDefinition = {
     { name: 'Podcast Safe', params: { threshold: -6, ceiling: -1.5, character: 0.4 } },
     { name: 'Vinyl Pre-Master', params: { threshold: -4, ceiling: -2, character: 0.2 } },
   ],
+  demoClip: '/demos/mastering-generic.wav',
 };

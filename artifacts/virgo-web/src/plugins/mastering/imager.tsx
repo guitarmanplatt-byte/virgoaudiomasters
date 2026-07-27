@@ -215,4 +215,5 @@ export const imager: PluginDefinition = {
     { name: 'Focus Center Vocal', params: { widthLow: 1, widthMid: 0.7, widthHigh: 1.2, stereoize: 0, xLow: 250, xHigh: 5000 } },
     { name: 'Super Wide Air', params: { widthLow: 0.8, widthMid: 1.2, widthHigh: 1.9, stereoize: 0.25, xLow: 200, xHigh: 6000 } },
   ],
+  demoClip: '/demos/mastering-generic.wav',
 };

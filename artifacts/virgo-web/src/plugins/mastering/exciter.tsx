@@ -168,4 +168,5 @@ export const exciter: PluginDefinition = {
     { name: 'Lo-Fi Retro', params: { mode: 3, xLow: 400, xHigh: 2500, amtLow: 0.45, mixLow: 0.9, amtMid: 0.5, mixMid: 0.9, amtHigh: 0.3, mixHigh: 0.8, trim: -3 } },
     { name: 'Subtle Glue', params: { mode: 1, xLow: 200, xHigh: 3000, amtLow: 0.1, mixLow: 0.5, amtMid: 0.1, mixMid: 0.5, amtHigh: 0.1, mixHigh: 0.5, trim: 0 } },
   ],
+  demoClip: '/demos/mastering-generic.wav',
 };

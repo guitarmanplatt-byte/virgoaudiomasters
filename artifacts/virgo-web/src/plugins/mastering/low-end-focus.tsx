@@ -104,4 +104,5 @@ export const lowEndFocus: PluginDefinition = {
     { name: 'Warm Vinyl Bass', params: { xover: 180, contrast: -0.3, gain: 1, mix: 0.8 } },
     { name: 'Subtle Tighten', params: { xover: 120, contrast: 0.3, gain: 0, mix: 0.7 } },
   ],
+  demoClip: '/demos/mastering-generic.wav',
 };

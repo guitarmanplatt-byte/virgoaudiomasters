@@ -295,4 +295,5 @@ export const dynamicEq: PluginDefinition = {
       { freq: 6000, gain: 0.8, q: 1.0 },
     ]),
   ],
+  demoClip: '/demos/mastering-generic.wav',
 };
