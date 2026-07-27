@@ -43,8 +43,11 @@ function withUploadTimeout(req: Request, res: Response, next: NextFunction): voi
 // ---------------------------------------------------------------------------
 function buildUploadRateLimiter() {
   const max = parseInt(process.env["UPLOAD_RATE_LIMIT_PER_MINUTE"] ?? "10", 10);
+  // UPLOAD_RATE_LIMIT_WINDOW_MS lets tests (and operators) override the default
+  // 1-minute window without redeploying. Defaults to 60 000 ms in production.
+  const windowMs = parseInt(process.env["UPLOAD_RATE_LIMIT_WINDOW_MS"] ?? "60000", 10);
   return rateLimit({
-    windowMs: 60 * 1000, // 1 minute
+    windowMs,
     max,
     standardHeaders: true,
     legacyHeaders: false,
