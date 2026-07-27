@@ -48,22 +48,21 @@ function withUploadTimeout(req: Request, res: Response, next: NextFunction): voi
 // When REDIS_URL is absent (local dev / single-instance) the default
 // MemoryStore is used automatically — no extra config needed.
 // ---------------------------------------------------------------------------
-function buildUploadRateLimiter() {
+export function buildUploadRateLimiter(storeOverride?: InstanceType<typeof RedisStore>) {
   const max = parseInt(process.env["UPLOAD_RATE_LIMIT_PER_MINUTE"] ?? "10", 10);
   // UPLOAD_RATE_LIMIT_WINDOW_MS lets tests (and operators) override the default
   // 1-minute window without redeploying. Defaults to 60 000 ms in production.
   const windowMs = parseInt(process.env["UPLOAD_RATE_LIMIT_WINDOW_MS"] ?? "60000", 10);
 
-  const redisUrl = process.env["REDIS_URL"];
-  const store = redisUrl
-    ? (() => {
-        const client = new Redis(redisUrl);
-        return new RedisStore({
-          sendCommand: (...args: string[]) =>
-            client.call(...(args as [string, ...string[]])) as Promise<number>,
-        });
-      })()
-    : undefined; // undefined → express-rate-limit uses its built-in MemoryStore
+  const store: InstanceType<typeof RedisStore> | undefined = storeOverride ?? (() => {
+    const redisUrl = process.env["REDIS_URL"];
+    if (!redisUrl) return undefined;
+    const client = new Redis(redisUrl);
+    return new RedisStore({
+      sendCommand: (...args: string[]) =>
+        client.call(...(args as [string, ...string[]])) as Promise<number>,
+    });
+  })();
 
   return rateLimit({
     windowMs,
