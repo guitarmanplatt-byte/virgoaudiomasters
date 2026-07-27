@@ -4,6 +4,12 @@ export interface SpectrumAnalyzerProps {
   analyser: AnalyserNode | null;
   /** Optional second analyser drawn dimmed behind (e.g. input vs output). */
   referenceAnalyser?: AnalyserNode | null;
+  /**
+   * Optional EQ curve overlay: a function that takes a frequency in Hz and
+   * returns the gain in dB at that frequency (e.g. the combined plugin
+   * filter response). Drawn centred in the canvas with a ±12 dB scale.
+   */
+  eqCurve?: (f: number) => number;
   height?: number;
   className?: string;
 }
@@ -14,8 +20,12 @@ const MIN_FREQ = 20;
 const MAX_FREQ = 20000;
 
 /** Real-time FFT spectrum analyzer canvas in the black & gold theme. */
-export function SpectrumAnalyzer({ analyser, referenceAnalyser, height = 220, className }: SpectrumAnalyzerProps) {
+export function SpectrumAnalyzer({ analyser, referenceAnalyser, eqCurve, height = 220, className }: SpectrumAnalyzerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Keep a stable ref so the animation loop always reads the latest curve
+  // without needing to restart when it changes.
+  const eqCurveRef = useRef<((f: number) => number) | undefined>(eqCurve);
+  useEffect(() => { eqCurveRef.current = eqCurve; }, [eqCurve]);
 
   useEffect(() => {
     let raf = 0;
@@ -88,6 +98,54 @@ export function SpectrumAnalyzer({ analyser, referenceAnalyser, height = 220, cl
         analyser.getFloatFrequencyData(data);
         drawCurve(data, '', 'rgba(232,160,48,0.16)');
         drawCurve(data, '#E8A030', null);
+      }
+
+      // EQ curve overlay — centred at H/2 with a ±12 dB display scale.
+      const curve = eqCurveRef.current;
+      if (curve) {
+        const DB_RANGE = 12; // ±dB shown
+        const centerY = H * 0.5;
+        const scale = (H * 0.35) / DB_RANGE; // pixels per dB
+
+        ctx.beginPath();
+        let started = false;
+        for (let px = 0; px <= W; px += 2) {
+          const f = xToFreq(px, W);
+          const db = Math.max(-DB_RANGE * 2, Math.min(DB_RANGE * 2, curve(f)));
+          const y = centerY - db * scale;
+          if (!started) { ctx.moveTo(px, y); started = true; }
+          else ctx.lineTo(px, y);
+        }
+        // Filled region between curve and the centre (0 dB) line
+        ctx.lineTo(W, centerY);
+        ctx.lineTo(0, centerY);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(232,160,48,0.10)';
+        ctx.fill();
+
+        // Curve stroke
+        ctx.beginPath();
+        started = false;
+        for (let px = 0; px <= W; px += 2) {
+          const f = xToFreq(px, W);
+          const db = Math.max(-DB_RANGE * 2, Math.min(DB_RANGE * 2, curve(f)));
+          const y = centerY - db * scale;
+          if (!started) { ctx.moveTo(px, y); started = true; }
+          else ctx.lineTo(px, y);
+        }
+        ctx.strokeStyle = '#E8A030';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // 0 dB centre reference line (subtle)
+        ctx.beginPath();
+        ctx.moveTo(0, centerY);
+        ctx.lineTo(W, centerY);
+        ctx.strokeStyle = 'rgba(232,160,48,0.20)';
+        ctx.lineWidth = 0.75;
+        ctx.setLineDash([4, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
       }
     };
 

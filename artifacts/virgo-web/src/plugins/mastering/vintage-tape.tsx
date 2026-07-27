@@ -4,10 +4,11 @@
  * wow & flutter modulation via a tiny interpolated delay buffer, and optional
  * tape hiss that scales inversely with tape speed.
  */
+import { useMemo } from 'react';
 import type { PluginDefinition, PluginUIProps } from '@/lib/plugin-engine/types';
 import { Knob } from '@/components/plugin/Knob';
 import { SpectrumAnalyzer } from '@/components/plugin/SpectrumAnalyzer';
-import { BIQUAD_HELPERS, fmtDb, fmtHz, fmtPct, GOLD } from './kernel-utils';
+import { BIQUAD_HELPERS, biquadMagnitudeDb, fmtDb, fmtHz, fmtPct, GOLD } from './kernel-utils';
 
 // ─── Tape Speed → DSP parameter interpolation ─────────────────────────────
 // Based on real IEC/NAB equalization curves and typical machine noise floors.
@@ -227,6 +228,18 @@ function fmtIps(ips: number): string {
 function Controls({ params, setParam, analyser, inputAnalyser }: PluginUIProps) {
   const tapeSpeed: number = (params.tapeSpeed as number) ?? 15;
 
+  // Combined frequency-response curve: head-bump low shelf + HF rolloff lowpass.
+  // Recomputed only when the relevant params change; passed to SpectrumAnalyzer
+  // so the canvas animation loop always reads the latest function via its ref.
+  const eqCurve = useMemo(() => {
+    const bumpFreq    = (params.bumpFreq    as number) ?? 80;
+    const bumpGain    = (params.bumpGain    as number) ?? 2.5;
+    const rolloffFreq = (params.rolloffFreq as number) ?? 14000;
+    return (f: number) =>
+      biquadMagnitudeDb('lowshelf', bumpFreq, bumpGain, 0.71, f) +
+      biquadMagnitudeDb('lowpass',  rolloffFreq, 0, 0.71, f);
+  }, [params.bumpFreq, params.bumpGain, params.rolloffFreq]);
+
   // Apply the speed macro — sets the three linked DSP params
   function applySpeed(ips: number) {
     const p = speedToParams(ips);
@@ -255,7 +268,7 @@ function Controls({ params, setParam, analyser, inputAnalyser }: PluginUIProps) 
 
   return (
     <div className="space-y-4">
-      <SpectrumAnalyzer analyser={analyser} referenceAnalyser={inputAnalyser} height={180} />
+      <SpectrumAnalyzer analyser={analyser} referenceAnalyser={inputAnalyser} eqCurve={eqCurve} height={180} />
 
       {/* ── Tape Speed Macro ─────────────────────────────────────── */}
       <div className="rounded-md border border-[#2E2E2E] bg-[#111] px-5 py-4 space-y-3">
