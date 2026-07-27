@@ -1,0 +1,190 @@
+/**
+ * Unit tests: buildUploadRateLimiter store-selection logic
+ *
+ * Verifies that the factory function picks the correct backing store based on
+ * the REDIS_URL environment variable:
+ *
+ *   - REDIS_URL set to a non-empty string  → RedisStore + ioredis client
+ *   - REDIS_URL absent (undefined)         → built-in MemoryStore (no Redis)
+ *   - REDIS_URL set to empty string ""     → built-in MemoryStore (no Redis)
+ *
+ * Strategy
+ * --------
+ * We mock both `ioredis` and `rate-limit-redis` so no real network connection
+ * is attempted.  After each call to buildUploadRateLimiter() we inspect the
+ * mock constructor call counts to assert which code path was taken.
+ *
+ * The module-level `const uploadRateLimiter = buildUploadRateLimiter()` in
+ * audio.ts runs once when the module is first imported.  To keep that side-
+ * effect from polluting our per-test mock state we:
+ *   1. Ensure REDIS_URL is unset before importing, so the module-level call
+ *      takes the MemoryStore path and never touches the mocks.
+ *   2. Clear mock call counts with vi.clearAllMocks() in beforeEach so each
+ *      test starts with a clean slate.
+ */
+
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+// ---------------------------------------------------------------------------
+// Mocks — declared BEFORE any import so Vitest hoists them correctly.
+// ---------------------------------------------------------------------------
+
+vi.mock("ioredis", () => {
+  /** Minimal stand-in for an ioredis client — must use a real function so `new` works. */
+  function RedisMock(this: Record<string, unknown>) {
+    this.call = vi.fn().mockResolvedValue(null);
+    this.disconnect = vi.fn();
+    this.quit = vi.fn().mockResolvedValue("OK");
+  }
+  const RedisSpy = vi.fn(RedisMock as unknown as new (...args: unknown[]) => unknown);
+  return { default: RedisSpy };
+});
+
+vi.mock("rate-limit-redis", () => {
+  /** Stand-in for RedisStore — must use a real function so `new` works. */
+  function RedisStoreMock(this: Record<string, unknown>, opts?: { sendCommand?: unknown }) {
+    this._opts = opts;
+    this.localKeys = false;
+    this.init = vi.fn();
+    this.increment = vi.fn().mockResolvedValue({ totalHits: 1, resetTime: new Date() });
+    this.decrement = vi.fn();
+    this.resetKey = vi.fn();
+    this.resetAll = vi.fn();
+  }
+  const RedisStoreSpy = vi.fn(RedisStoreMock as unknown as new (...args: unknown[]) => unknown);
+  return { RedisStore: RedisStoreSpy };
+});
+
+// Prevent the DB import from attempting a real Postgres connection.
+vi.mock("@workspace/db", () => ({
+  db: {},
+  audioProjectsTable: {},
+  pluginPresetsTable: {},
+}));
+
+// ---------------------------------------------------------------------------
+// Import the function under test AFTER mocks are established and after we
+// ensure REDIS_URL is absent so the module-level limiter uses MemoryStore.
+// ---------------------------------------------------------------------------
+delete process.env["REDIS_URL"];
+
+import { buildUploadRateLimiter } from "../routes/audio.js";
+import Redis from "ioredis";
+import { RedisStore } from "rate-limit-redis";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Cast to a vi.Mock so we can inspect call counts. */
+const RedisMock = Redis as unknown as ReturnType<typeof vi.fn>;
+const RedisStoreMock = RedisStore as unknown as ReturnType<typeof vi.fn>;
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe("buildUploadRateLimiter — store selection", () => {
+  // Save and restore the original env value around each test.
+  const originalRedisUrl = process.env["REDIS_URL"];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (originalRedisUrl === undefined) {
+      delete process.env["REDIS_URL"];
+    } else {
+      process.env["REDIS_URL"] = originalRedisUrl;
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // 1. Redis path
+  // -------------------------------------------------------------------------
+  it("uses RedisStore when REDIS_URL is set to a non-empty string", () => {
+    process.env["REDIS_URL"] = "redis://localhost:6379";
+
+    buildUploadRateLimiter();
+
+    // The ioredis client should have been constructed with the provided URL.
+    expect(RedisMock).toHaveBeenCalledTimes(1);
+    expect(RedisMock).toHaveBeenCalledWith("redis://localhost:6379");
+
+    // RedisStore should have been constructed (once for this call).
+    expect(RedisStoreMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes a sendCommand function to RedisStore that delegates to the Redis client", () => {
+    process.env["REDIS_URL"] = "redis://localhost:6379";
+
+    buildUploadRateLimiter();
+
+    // Retrieve the options object passed to the RedisStore constructor.
+    const storeOptions = RedisStoreMock.mock.calls[0]?.[0] as { sendCommand: (...args: string[]) => unknown };
+    expect(storeOptions).toBeDefined();
+    expect(typeof storeOptions.sendCommand).toBe("function");
+
+    // Calling sendCommand should forward to client.call.
+    const mockClientInstance = RedisMock.mock.results[0]?.value as { call: ReturnType<typeof vi.fn> };
+    storeOptions.sendCommand("INCRBY", "key", "1");
+    expect(mockClientInstance.call).toHaveBeenCalledWith("INCRBY", "key", "1");
+  });
+
+  // -------------------------------------------------------------------------
+  // 2. MemoryStore path — REDIS_URL absent
+  // -------------------------------------------------------------------------
+  it("does not create a Redis client or RedisStore when REDIS_URL is absent", () => {
+    delete process.env["REDIS_URL"];
+
+    buildUploadRateLimiter();
+
+    expect(RedisMock).not.toHaveBeenCalled();
+    expect(RedisStoreMock).not.toHaveBeenCalled();
+  });
+
+  // -------------------------------------------------------------------------
+  // 3. MemoryStore path — REDIS_URL is empty string
+  // -------------------------------------------------------------------------
+  it("does not create a Redis client or RedisStore when REDIS_URL is an empty string", () => {
+    process.env["REDIS_URL"] = "";
+
+    buildUploadRateLimiter();
+
+    // An empty string is falsy; the factory must treat it the same as absent.
+    expect(RedisMock).not.toHaveBeenCalled();
+    expect(RedisStoreMock).not.toHaveBeenCalled();
+  });
+
+  // -------------------------------------------------------------------------
+  // 4. storeOverride bypasses auto-selection
+  // -------------------------------------------------------------------------
+  it("uses the provided storeOverride and skips Redis construction entirely", () => {
+    process.env["REDIS_URL"] = "redis://localhost:6379";
+
+    const customStore = new RedisStore({ sendCommand: vi.fn() });
+    // Clear counts from the RedisStore constructor call above.
+    vi.clearAllMocks();
+
+    buildUploadRateLimiter(customStore);
+
+    // Even though REDIS_URL is set, no new Redis client should be created.
+    expect(RedisMock).not.toHaveBeenCalled();
+    // And no additional RedisStore instances should be constructed inside the factory.
+    expect(RedisStoreMock).not.toHaveBeenCalled();
+  });
+
+  // -------------------------------------------------------------------------
+  // 5. Returned middleware is a function (sanity check)
+  // -------------------------------------------------------------------------
+  it("returns a callable Express middleware in all configurations", () => {
+    delete process.env["REDIS_URL"];
+    const withMemory = buildUploadRateLimiter();
+    expect(typeof withMemory).toBe("function");
+
+    process.env["REDIS_URL"] = "redis://localhost:6379";
+    const withRedis = buildUploadRateLimiter();
+    expect(typeof withRedis).toBe("function");
+  });
+});
