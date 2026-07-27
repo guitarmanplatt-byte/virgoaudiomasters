@@ -77,6 +77,7 @@ export function PluginWindow({ definition }: PluginWindowProps) {
   // Demo A/B sequencing: 'idle' → 'dry' (bypass on) → 'wet' (plugin active) → 'idle'
   const [demoPhase, setDemoPhase] = useState<'idle' | 'dry' | 'wet'>('idle');
   const demoPhaseRef = useRef<'idle' | 'dry' | 'wet'>('idle');
+  const [demoLoading, setDemoLoading] = useState(false);
 
   // User presets
   const { data: userPresets } = useListPluginPresets({ pluginId: definition.id });
@@ -179,6 +180,7 @@ export function PluginWindow({ definition }: PluginWindowProps) {
 
   const loadDemo = async () => {
     if (!definition.demoClip) return;
+    setDemoLoading(true);
     try {
       // definition.demoClip is a root-relative path like "/demos/de-noise.wav".
       // Strip the leading slash and prepend Vite's BASE_URL so the fetch works
@@ -212,6 +214,8 @@ export function PluginWindow({ definition }: PluginWindowProps) {
     } catch (err) {
       console.error('[plugin] demo load failed', err);
       toast.error('Could not load demo clip.');
+    } finally {
+      setDemoLoading(false);
     }
   };
 
@@ -504,10 +508,13 @@ export function PluginWindow({ definition }: PluginWindowProps) {
             size="sm"
             className="gap-2 border-[#E8A030]/40 bg-[#E8A030]/8 text-[#E8A030] hover:border-[#E8A030]/70 hover:bg-[#E8A030]/15"
             onClick={loadDemo}
+            disabled={demoLoading}
             title="Plays dry then processed so you can hear the difference"
           >
-            <Sparkles className="w-4 h-4" />
-            Try demo
+            {demoLoading
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <Sparkles className="w-4 h-4" />}
+            {demoLoading ? 'Loading…' : 'Try demo'}
           </Button>
         )}
 
