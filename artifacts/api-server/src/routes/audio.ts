@@ -146,15 +146,10 @@ export function buildUploadRateLimiter(storeOverride?: InstanceType<typeof Redis
 
 const { middleware: uploadRateLimiter, disconnect: disconnectRateLimiter } = buildUploadRateLimiter();
 
-// Register graceful-shutdown handlers so the Redis connection is closed cleanly
-// when the process receives SIGTERM or SIGINT.
-for (const signal of ["SIGTERM", "SIGINT"] as const) {
-  process.once(signal, () => {
-    disconnectRateLimiter().catch((err) => {
-      console.error("[rate-limiter] error during Redis disconnect on", signal, err);
-    });
-  });
-}
+// Export the disconnect handle so the server entry point can call it as part of
+// the centralised graceful-shutdown sequence (after the HTTP server stops
+// accepting connections).
+export { disconnectRateLimiter };
 
 const router: IRouter = Router();
 
