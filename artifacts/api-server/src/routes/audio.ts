@@ -58,9 +58,10 @@ export interface RateLimiterHandle {
 }
 
 export function buildUploadRateLimiter(storeOverride?: InstanceType<typeof RedisStore>): RateLimiterHandle {
-  const max = parseInt(process.env["UPLOAD_RATE_LIMIT_PER_MINUTE"] ?? "10", 10);
-  // UPLOAD_RATE_LIMIT_WINDOW_MS lets tests (and operators) override the default
-  // 1-minute window without redeploying. Defaults to 60 000 ms in production.
+  // UPLOAD_RATE_LIMIT_WINDOW_MS lets operators override the default 1-minute
+  // window.  Read at construction time — changing the window duration mid-flight
+  // would corrupt existing counters, so a server restart is required for this
+  // one setting.  Defaults to 60 000 ms.
   const windowMs = parseInt(process.env["UPLOAD_RATE_LIMIT_WINDOW_MS"] ?? "60000", 10);
 
   let redisClient: InstanceType<typeof Redis> | undefined;
@@ -96,7 +97,13 @@ export function buildUploadRateLimiter(storeOverride?: InstanceType<typeof Redis
 
   const middleware = rateLimit({
     windowMs,
-    max,
+    // Re-read UPLOAD_RATE_LIMIT_PER_MINUTE on every request so operators can
+    // raise or lower the limit by updating the env var — no server restart
+    // needed.  Falls back to 10 if the value is missing or not a positive integer.
+    max: () => {
+      const val = parseInt(process.env["UPLOAD_RATE_LIMIT_PER_MINUTE"] ?? "10", 10);
+      return Number.isFinite(val) && val > 0 ? val : 10;
+    },
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: "Too many upload requests from this IP, please try again later." },
