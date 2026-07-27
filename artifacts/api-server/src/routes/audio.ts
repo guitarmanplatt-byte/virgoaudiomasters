@@ -69,9 +69,28 @@ export function buildUploadRateLimiter(storeOverride?: InstanceType<typeof Redis
     const redisUrl = process.env["REDIS_URL"];
     if (!redisUrl) return undefined;
     redisClient = new Redis(redisUrl);
+
+    // Attach an error listener so that a dropped connection (network blip,
+    // Redis restart) doesn't emit an unhandled 'error' event and crash the
+    // process.  The per-command error paths in sendCommand below handle the
+    // individual request failures independently.
+    redisClient.on("error", (err: Error) => {
+      console.error("[rate-limiter] Redis connection error:", err.message);
+    });
+
     return new RedisStore({
-      sendCommand: (...args: string[]) =>
-        redisClient!.call(...(args as [string, ...string[]])) as Promise<number>,
+      sendCommand: async (...args: string[]): Promise<number> => {
+        try {
+          return await (redisClient!.call(...(args as [string, ...string[]])) as Promise<number>);
+        } catch (err) {
+          // Log and rethrow so express-rate-limit propagates the error to
+          // Express's error-handling middleware, which returns a defined 500
+          // response instead of leaving the request hanging or crashing the
+          // process.
+          console.error("[rate-limiter] Redis command failed mid-request:", (err as Error).message);
+          throw err;
+        }
+      },
     });
   })();
 

@@ -39,6 +39,7 @@ vi.mock("ioredis", () => {
     this.call = vi.fn().mockResolvedValue(null);
     this.disconnect = vi.fn();
     this.quit = vi.fn().mockResolvedValue("OK");
+    this.on = vi.fn();
   }
   const RedisSpy = vi.fn(RedisMock as unknown as new (...args: unknown[]) => unknown);
   return { default: RedisSpy };
@@ -258,5 +259,98 @@ describe("buildUploadRateLimiter — disconnect handle", () => {
 
     await expect(disconnect()).resolves.toBeUndefined();
     await expect(disconnect()).resolves.toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Mid-request Redis failure tests
+// ---------------------------------------------------------------------------
+
+describe("buildUploadRateLimiter — mid-request Redis failure", () => {
+  const originalRedisUrl = process.env["REDIS_URL"];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (originalRedisUrl === undefined) {
+      delete process.env["REDIS_URL"];
+    } else {
+      process.env["REDIS_URL"] = originalRedisUrl;
+    }
+  });
+
+  it("attaches an error listener to the Redis client so dropped connections don't crash the process", () => {
+    process.env["REDIS_URL"] = "redis://localhost:6379";
+
+    buildUploadRateLimiter();
+
+    // The ioredis client mock instance should have had .on("error", ...) called.
+    const mockClientInstance = RedisMock.mock.results[0]?.value as {
+      on: ReturnType<typeof vi.fn>;
+    };
+    expect(mockClientInstance.on).toHaveBeenCalledWith("error", expect.any(Function));
+  });
+
+  it("sendCommand rejects when client.call rejects (mid-request failure propagates)", async () => {
+    process.env["REDIS_URL"] = "redis://localhost:6379";
+
+    buildUploadRateLimiter();
+
+    // Retrieve the sendCommand passed to RedisStore.
+    const storeOptions = RedisStoreMock.mock.calls[0]?.[0] as {
+      sendCommand: (...args: string[]) => Promise<number>;
+    };
+    expect(storeOptions).toBeDefined();
+
+    // Make the underlying Redis client reject on the next call.
+    const mockClientInstance = RedisMock.mock.results[0]?.value as {
+      call: ReturnType<typeof vi.fn>;
+    };
+    const simulatedError = new Error("Connection lost");
+    mockClientInstance.call.mockRejectedValueOnce(simulatedError);
+
+    // sendCommand must propagate the rejection so express-rate-limit can call
+    // next(err), producing a defined 500 response rather than a silent hang.
+    await expect(storeOptions.sendCommand("INCRBY", "key", "1")).rejects.toThrow("Connection lost");
+  });
+
+  it("sendCommand succeeds normally when client.call resolves (no false positives)", async () => {
+    process.env["REDIS_URL"] = "redis://localhost:6379";
+
+    buildUploadRateLimiter();
+
+    const storeOptions = RedisStoreMock.mock.calls[0]?.[0] as {
+      sendCommand: (...args: string[]) => Promise<number>;
+    };
+
+    const mockClientInstance = RedisMock.mock.results[0]?.value as {
+      call: ReturnType<typeof vi.fn>;
+    };
+    mockClientInstance.call.mockResolvedValueOnce(3);
+
+    await expect(storeOptions.sendCommand("INCRBY", "key", "1")).resolves.toBe(3);
+  });
+
+  it("a transient client.call rejection does not affect subsequent requests", async () => {
+    process.env["REDIS_URL"] = "redis://localhost:6379";
+
+    buildUploadRateLimiter();
+
+    const storeOptions = RedisStoreMock.mock.calls[0]?.[0] as {
+      sendCommand: (...args: string[]) => Promise<number>;
+    };
+    const mockClientInstance = RedisMock.mock.results[0]?.value as {
+      call: ReturnType<typeof vi.fn>;
+    };
+
+    // First call fails (transient network blip).
+    mockClientInstance.call.mockRejectedValueOnce(new Error("ECONNRESET"));
+    await expect(storeOptions.sendCommand("INCRBY", "key", "1")).rejects.toThrow("ECONNRESET");
+
+    // Second call recovers.
+    mockClientInstance.call.mockResolvedValueOnce(1);
+    await expect(storeOptions.sendCommand("INCRBY", "key", "1")).resolves.toBe(1);
   });
 });
