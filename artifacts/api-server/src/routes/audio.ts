@@ -1,6 +1,8 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
+import { RedisStore } from "rate-limit-redis";
+import Redis from "ioredis";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import fs from "fs";
@@ -40,18 +42,36 @@ function withUploadTimeout(req: Request, res: Response, next: NextFunction): voi
 // ---------------------------------------------------------------------------
 // Upload rate limiter
 // Default: 10 requests per minute per IP. Override with UPLOAD_RATE_LIMIT_PER_MINUTE.
+//
+// When REDIS_URL is set the limiter uses a RedisStore so that counters are
+// shared across all server replicas (accurate horizontal scaling).
+// When REDIS_URL is absent (local dev / single-instance) the default
+// MemoryStore is used automatically — no extra config needed.
 // ---------------------------------------------------------------------------
 function buildUploadRateLimiter() {
   const max = parseInt(process.env["UPLOAD_RATE_LIMIT_PER_MINUTE"] ?? "10", 10);
   // UPLOAD_RATE_LIMIT_WINDOW_MS lets tests (and operators) override the default
   // 1-minute window without redeploying. Defaults to 60 000 ms in production.
   const windowMs = parseInt(process.env["UPLOAD_RATE_LIMIT_WINDOW_MS"] ?? "60000", 10);
+
+  const redisUrl = process.env["REDIS_URL"];
+  const store = redisUrl
+    ? (() => {
+        const client = new Redis(redisUrl);
+        return new RedisStore({
+          sendCommand: (...args: string[]) =>
+            client.call(...(args as [string, ...string[]])) as Promise<number>,
+        });
+      })()
+    : undefined; // undefined → express-rate-limit uses its built-in MemoryStore
+
   return rateLimit({
     windowMs,
     max,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: "Too many upload requests from this IP, please try again later." },
+    ...(store ? { store } : {}),
   });
 }
 
