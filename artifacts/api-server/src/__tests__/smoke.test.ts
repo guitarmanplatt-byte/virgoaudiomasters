@@ -300,6 +300,260 @@ describe("POST /api/audio/upload — wall-clock timeout", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Audio list (GET /api/audio)
+// ---------------------------------------------------------------------------
+describe("GET /api/audio", () => {
+  const mockProject = {
+    id: "list-test-id",
+    name: "my-track",
+    originalFilename: "my-track.wav",
+    fileUrl: "/api/audio/file/some-uuid.wav",
+    status: "ready",
+    enhancementSettings: {},
+    masteringSettings: {},
+    createdAt: new Date("2024-01-01T00:00:00Z"),
+  };
+
+  beforeEach(async () => {
+    const { db } = await import("@workspace/db");
+    vi.mocked(db.orderBy).mockReset().mockResolvedValue([]);
+  });
+
+  it("returns 200 with an array when the DB is empty", async () => {
+    const res = await request(app).get("/api/audio");
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+  });
+
+  it("returns 200 with serialised projects when the DB has records", async () => {
+    const { db } = await import("@workspace/db");
+    vi.mocked(db.orderBy).mockResolvedValueOnce([mockProject]);
+
+    const res = await request(app).get("/api/audio");
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0]).toHaveProperty("id", mockProject.id);
+    expect(typeof res.body[0].createdAt).toBe("string");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Audio get-by-id (GET /api/audio/:id)
+// ---------------------------------------------------------------------------
+describe("GET /api/audio/:id", () => {
+  const mockProject = {
+    id: "get-by-id-test",
+    name: "single-track",
+    originalFilename: "single-track.wav",
+    fileUrl: "/api/audio/file/some-uuid.wav",
+    status: "ready",
+    enhancementSettings: {},
+    masteringSettings: {},
+    createdAt: new Date("2024-02-01T00:00:00Z"),
+  };
+
+  beforeEach(async () => {
+    const { db } = await import("@workspace/db");
+    vi.mocked(db.where).mockReset().mockReturnThis();
+  });
+
+  it("returns 200 with the project when found", async () => {
+    const { db } = await import("@workspace/db");
+    vi.mocked(db.where).mockReturnValueOnce(
+      Promise.resolve([mockProject]) as unknown as ReturnType<typeof db.where>,
+    );
+
+    const res = await request(app).get(`/api/audio/${mockProject.id}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("id", mockProject.id);
+    expect(res.body).toHaveProperty("name", mockProject.name);
+    expect(typeof res.body.createdAt).toBe("string");
+  });
+
+  it("returns 404 when the project does not exist", async () => {
+    const { db } = await import("@workspace/db");
+    vi.mocked(db.where).mockReturnValueOnce(
+      Promise.resolve([]) as unknown as ReturnType<typeof db.where>,
+    );
+
+    const res = await request(app).get("/api/audio/nonexistent-id");
+    expect(res.status).toBe(404);
+    expect(res.body).toHaveProperty("error");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Audio rename (PATCH /api/audio/:id/name)
+// ---------------------------------------------------------------------------
+describe("PATCH /api/audio/:id/name", () => {
+  const mockProject = {
+    id: "rename-test-id",
+    name: "new-name",
+    originalFilename: "original.wav",
+    fileUrl: "/api/audio/file/some-uuid.wav",
+    status: "ready",
+    enhancementSettings: {},
+    masteringSettings: {},
+    createdAt: new Date("2024-03-01T00:00:00Z"),
+  };
+
+  beforeEach(async () => {
+    const { db } = await import("@workspace/db");
+    vi.mocked(db.returning).mockReset().mockResolvedValue([]);
+  });
+
+  it("returns 200 with the updated project on a valid request", async () => {
+    const { db } = await import("@workspace/db");
+    vi.mocked(db.returning).mockResolvedValueOnce([mockProject]);
+
+    const res = await request(app)
+      .patch(`/api/audio/${mockProject.id}/name`)
+      .send({ name: "new-name" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("id", mockProject.id);
+    expect(res.body).toHaveProperty("name", "new-name");
+    expect(typeof res.body.createdAt).toBe("string");
+  });
+
+  it("returns 400 when name is missing from the body", async () => {
+    const res = await request(app)
+      .patch("/api/audio/some-id/name")
+      .send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when name is not a string", async () => {
+    const res = await request(app)
+      .patch("/api/audio/some-id/name")
+      .send({ name: 42 });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 404 when the project does not exist", async () => {
+    // returning() resolves to [] → no project found → route returns 404
+    const res = await request(app)
+      .patch("/api/audio/nonexistent-id/name")
+      .send({ name: "anything" });
+
+    expect(res.status).toBe(404);
+    expect(res.body).toHaveProperty("error");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Audio enhancement update (PATCH /api/audio/:id/enhancement)
+// ---------------------------------------------------------------------------
+describe("PATCH /api/audio/:id/enhancement", () => {
+  const mockProject = {
+    id: "enhancement-test-id",
+    name: "enhancement-track",
+    originalFilename: "enhancement-track.wav",
+    fileUrl: "/api/audio/file/some-uuid.wav",
+    status: "ready",
+    enhancementSettings: { stereoWidth: 1.2 },
+    masteringSettings: {},
+    createdAt: new Date("2024-04-01T00:00:00Z"),
+  };
+
+  beforeEach(async () => {
+    const { db } = await import("@workspace/db");
+    vi.mocked(db.where).mockReset().mockReturnThis();
+    vi.mocked(db.returning).mockReset().mockResolvedValue([]);
+  });
+
+  it("returns 200 with the updated project on a valid request", async () => {
+    const { db } = await import("@workspace/db");
+    // First where() call is the SELECT to find the existing project
+    vi.mocked(db.where).mockReturnValueOnce(
+      Promise.resolve([mockProject]) as unknown as ReturnType<typeof db.where>,
+    );
+    // returning() call is from the UPDATE statement
+    vi.mocked(db.returning).mockResolvedValueOnce([{ ...mockProject, enhancementSettings: { stereoWidth: 1.5 } }]);
+
+    const res = await request(app)
+      .patch(`/api/audio/${mockProject.id}/enhancement`)
+      .send({ stereoWidth: 1.5 });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("id", mockProject.id);
+    expect(typeof res.body.createdAt).toBe("string");
+  });
+
+  it("returns 404 when the project does not exist", async () => {
+    const { db } = await import("@workspace/db");
+    vi.mocked(db.where).mockReturnValueOnce(
+      Promise.resolve([]) as unknown as ReturnType<typeof db.where>,
+    );
+
+    const res = await request(app)
+      .patch("/api/audio/nonexistent-id/enhancement")
+      .send({ stereoWidth: 1.5 });
+
+    expect(res.status).toBe(404);
+    expect(res.body).toHaveProperty("error");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Audio mastering update (PATCH /api/audio/:id/mastering)
+// ---------------------------------------------------------------------------
+describe("PATCH /api/audio/:id/mastering", () => {
+  const mockProject = {
+    id: "mastering-test-id",
+    name: "mastering-track",
+    originalFilename: "mastering-track.wav",
+    fileUrl: "/api/audio/file/some-uuid.wav",
+    status: "ready",
+    enhancementSettings: {},
+    masteringSettings: { targetLufs: -14 },
+    createdAt: new Date("2024-05-01T00:00:00Z"),
+  };
+
+  beforeEach(async () => {
+    const { db } = await import("@workspace/db");
+    vi.mocked(db.where).mockReset().mockReturnThis();
+    vi.mocked(db.returning).mockReset().mockResolvedValue([]);
+  });
+
+  it("returns 200 with the updated project on a valid request", async () => {
+    const { db } = await import("@workspace/db");
+    // First where() call is the SELECT to find the existing project
+    vi.mocked(db.where).mockReturnValueOnce(
+      Promise.resolve([mockProject]) as unknown as ReturnType<typeof db.where>,
+    );
+    // returning() call is from the UPDATE statement
+    vi.mocked(db.returning).mockResolvedValueOnce([{ ...mockProject, masteringSettings: { targetLufs: -16 } }]);
+
+    const res = await request(app)
+      .patch(`/api/audio/${mockProject.id}/mastering`)
+      .send({ targetLufs: -16 });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("id", mockProject.id);
+    expect(typeof res.body.createdAt).toBe("string");
+  });
+
+  it("returns 404 when the project does not exist", async () => {
+    const { db } = await import("@workspace/db");
+    vi.mocked(db.where).mockReturnValueOnce(
+      Promise.resolve([]) as unknown as ReturnType<typeof db.where>,
+    );
+
+    const res = await request(app)
+      .patch("/api/audio/nonexistent-id/mastering")
+      .send({ targetLufs: -16 });
+
+    expect(res.status).toBe(404);
+    expect(res.body).toHaveProperty("error");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 404 for unknown routes
 // ---------------------------------------------------------------------------
 describe("Unknown routes", () => {
