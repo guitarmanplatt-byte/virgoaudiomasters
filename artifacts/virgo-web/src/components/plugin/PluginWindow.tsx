@@ -74,6 +74,10 @@ export function PluginWindow({ definition }: PluginWindowProps) {
   const [renameText, setRenameText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Demo A/B sequencing: 'idle' → 'dry' (bypass on) → 'wet' (plugin active) → 'idle'
+  const [demoPhase, setDemoPhase] = useState<'idle' | 'dry' | 'wet'>('idle');
+  const demoPhaseRef = useRef<'idle' | 'dry' | 'wet'>('idle');
+
   // User presets
   const { data: userPresets } = useListPluginPresets({ pluginId: definition.id });
   const createPreset = useCreatePluginPreset();
@@ -84,7 +88,31 @@ export function PluginWindow({ definition }: PluginWindowProps) {
   }, [queryClient, definition.id]);
 
   useEffect(() => {
-    engine.onEnded = () => setIsPlaying(false);
+    engine.onEnded = () => {
+      const phase = demoPhaseRef.current;
+      if (phase === 'dry') {
+        // Dry phase ended → switch to processed (wet) playback
+        demoPhaseRef.current = 'wet';
+        setDemoPhase('wet');
+        engine.setBypass(false);
+        setBypass(false);
+        engine.seek(0);
+        engine.play().then(() => {
+          setIsPlaying(true);
+        }).catch(() => {
+          demoPhaseRef.current = 'idle';
+          setDemoPhase('idle');
+          setIsPlaying(false);
+        });
+      } else {
+        // Wet phase or normal playback ended
+        setIsPlaying(false);
+        if (phase === 'wet') {
+          demoPhaseRef.current = 'idle';
+          setDemoPhase('idle');
+        }
+      }
+    };
     return () => {
       engine.dispose();
       engineRef.current = null;
@@ -163,13 +191,23 @@ export function PluginWindow({ definition }: PluginWindowProps) {
       const name = definition.demoClip.split('/').pop() ?? 'demo.wav';
       const file = new File([blob], name, { type: blob.type || 'audio/wav' });
       await handleFile(file);
-      // Auto-play so the effect is immediately audible
+      // Phase 1: play dry (bypass on) so users hear the unprocessed signal first,
+      // then onEnded automatically transitions to Phase 2 (processed).
+      demoPhaseRef.current = 'dry';
+      setDemoPhase('dry');
+      engine.setBypass(true);
+      setBypass(true);
       try {
         await engine.play();
         setIsPlaying(true);
         setAudioReady(true);
+        toast.info('Playing DRY — then PROCESSED so you can hear the difference', { duration: 3000 });
       } catch {
-        // play() failed (e.g. user gesture required) — audio is loaded, user can press play
+        // play() failed (e.g. autoplay blocked) — audio is still loaded; user can press play.
+        demoPhaseRef.current = 'idle';
+        setDemoPhase('idle');
+        engine.setBypass(false);
+        setBypass(false);
       }
     } catch (err) {
       console.error('[plugin] demo load failed', err);
@@ -466,11 +504,30 @@ export function PluginWindow({ definition }: PluginWindowProps) {
             size="sm"
             className="gap-2 border-[#E8A030]/40 bg-[#E8A030]/8 text-[#E8A030] hover:border-[#E8A030]/70 hover:bg-[#E8A030]/15"
             onClick={loadDemo}
-            title="Load a built-in demo clip to hear the plugin in action"
+            title="Plays dry then processed so you can hear the difference"
           >
             <Sparkles className="w-4 h-4" />
             Try demo
           </Button>
+        )}
+
+        {/* Demo A/B phase badge — visible while the auto-sequence is running */}
+        {demoPhase !== 'idle' && (
+          <div className="flex items-center gap-1.5 px-2.5 h-7 rounded-sm border text-[10px] font-bold tracking-widest uppercase"
+            style={
+              demoPhase === 'dry'
+                ? { borderColor: '#555', background: '#1a1a1a', color: '#888' }
+                : { borderColor: '#E8A030aa', background: 'rgba(232,160,48,0.12)', color: '#E8A030' }
+            }
+          >
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
+                style={{ background: demoPhase === 'dry' ? '#666' : '#E8A030' }} />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5"
+                style={{ background: demoPhase === 'dry' ? '#666' : '#E8A030' }} />
+            </span>
+            {demoPhase === 'dry' ? 'DRY' : 'PROCESSED'}
+          </div>
         )}
 
         <div className="flex items-center gap-1">
