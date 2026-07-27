@@ -146,6 +146,17 @@ export function SpectrumAnalyzer({ analyser, referenceAnalyser, eqCurve, height 
         ctx.setLineDash([4, 4]);
         ctx.stroke();
         ctx.setLineDash([]);
+
+        // EQ dB scale labels on the right edge (+6, 0, −6)
+        ctx.font = '9px ui-monospace, monospace';
+        ctx.fillStyle = 'rgba(232,160,48,0.65)';
+        ctx.textAlign = 'right';
+        for (const labelDb of [6, 0, -6]) {
+          const labelY = centerY - labelDb * scale;
+          const text = labelDb > 0 ? `+${labelDb}` : `${labelDb}`;
+          ctx.fillText(text, W - 3, labelY + 3);
+        }
+        ctx.textAlign = 'left';
       }
     };
 
