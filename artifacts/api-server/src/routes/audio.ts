@@ -47,24 +47,35 @@ function withUploadTimeout(req: Request, res: Response, next: NextFunction): voi
 // shared across all server replicas (accurate horizontal scaling).
 // When REDIS_URL is absent (local dev / single-instance) the default
 // MemoryStore is used automatically — no extra config needed.
+//
+// Returns { middleware, disconnect } so the caller can close the Redis
+// connection cleanly on graceful shutdown (SIGTERM / SIGINT).  When no Redis
+// client was created, disconnect() is a no-op.
 // ---------------------------------------------------------------------------
-export function buildUploadRateLimiter(storeOverride?: InstanceType<typeof RedisStore>) {
+export interface RateLimiterHandle {
+  middleware: ReturnType<typeof rateLimit>;
+  disconnect: () => Promise<void>;
+}
+
+export function buildUploadRateLimiter(storeOverride?: InstanceType<typeof RedisStore>): RateLimiterHandle {
   const max = parseInt(process.env["UPLOAD_RATE_LIMIT_PER_MINUTE"] ?? "10", 10);
   // UPLOAD_RATE_LIMIT_WINDOW_MS lets tests (and operators) override the default
   // 1-minute window without redeploying. Defaults to 60 000 ms in production.
   const windowMs = parseInt(process.env["UPLOAD_RATE_LIMIT_WINDOW_MS"] ?? "60000", 10);
 
+  let redisClient: InstanceType<typeof Redis> | undefined;
+
   const store: InstanceType<typeof RedisStore> | undefined = storeOverride ?? (() => {
     const redisUrl = process.env["REDIS_URL"];
     if (!redisUrl) return undefined;
-    const client = new Redis(redisUrl);
+    redisClient = new Redis(redisUrl);
     return new RedisStore({
       sendCommand: (...args: string[]) =>
-        client.call(...(args as [string, ...string[]])) as Promise<number>,
+        redisClient!.call(...(args as [string, ...string[]])) as Promise<number>,
     });
   })();
 
-  return rateLimit({
+  const middleware = rateLimit({
     windowMs,
     max,
     standardHeaders: true,
@@ -72,9 +83,27 @@ export function buildUploadRateLimiter(storeOverride?: InstanceType<typeof Redis
     message: { error: "Too many upload requests from this IP, please try again later." },
     ...(store ? { store } : {}),
   });
+
+  const disconnect = async (): Promise<void> => {
+    if (redisClient) {
+      await redisClient.quit();
+    }
+  };
+
+  return { middleware, disconnect };
 }
 
-const uploadRateLimiter = buildUploadRateLimiter();
+const { middleware: uploadRateLimiter, disconnect: disconnectRateLimiter } = buildUploadRateLimiter();
+
+// Register graceful-shutdown handlers so the Redis connection is closed cleanly
+// when the process receives SIGTERM or SIGINT.
+for (const signal of ["SIGTERM", "SIGINT"] as const) {
+  process.once(signal, () => {
+    disconnectRateLimiter().catch((err) => {
+      console.error("[rate-limiter] error during Redis disconnect on", signal, err);
+    });
+  });
+}
 
 const router: IRouter = Router();
 

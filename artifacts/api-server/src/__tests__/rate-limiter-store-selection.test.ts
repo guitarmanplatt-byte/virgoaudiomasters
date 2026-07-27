@@ -1,9 +1,13 @@
 /**
- * Unit tests: buildUploadRateLimiter store-selection logic
+ * Unit tests: buildUploadRateLimiter store-selection logic and disconnect handle
  *
- * Verifies that the factory function picks the correct backing store based on
- * the REDIS_URL environment variable:
+ * Verifies that the factory function:
+ *   - picks the correct backing store based on REDIS_URL
+ *   - returns a { middleware, disconnect } handle
+ *   - disconnect() calls quit() on the underlying ioredis client
+ *   - disconnect() is a no-op when no Redis client was created
  *
+ * Store-selection cases:
  *   - REDIS_URL set to a non-empty string  → RedisStore + ioredis client
  *   - REDIS_URL absent (undefined)         → built-in MemoryStore (no Redis)
  *   - REDIS_URL set to empty string ""     → built-in MemoryStore (no Redis)
@@ -180,11 +184,79 @@ describe("buildUploadRateLimiter — store selection", () => {
   // -------------------------------------------------------------------------
   it("returns a callable Express middleware in all configurations", () => {
     delete process.env["REDIS_URL"];
-    const withMemory = buildUploadRateLimiter();
+    const { middleware: withMemory } = buildUploadRateLimiter();
     expect(typeof withMemory).toBe("function");
 
     process.env["REDIS_URL"] = "redis://localhost:6379";
-    const withRedis = buildUploadRateLimiter();
+    const { middleware: withRedis } = buildUploadRateLimiter();
     expect(typeof withRedis).toBe("function");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Disconnect handle tests
+// ---------------------------------------------------------------------------
+
+describe("buildUploadRateLimiter — disconnect handle", () => {
+  const originalRedisUrl = process.env["REDIS_URL"];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (originalRedisUrl === undefined) {
+      delete process.env["REDIS_URL"];
+    } else {
+      process.env["REDIS_URL"] = originalRedisUrl;
+    }
+  });
+
+  it("disconnect() calls quit() on the ioredis client when Redis was created", async () => {
+    process.env["REDIS_URL"] = "redis://localhost:6379";
+
+    const { disconnect } = buildUploadRateLimiter();
+
+    // Retrieve the mock client instance created during factory execution.
+    const mockClientInstance = RedisMock.mock.results[0]?.value as { quit: ReturnType<typeof vi.fn> };
+    expect(mockClientInstance).toBeDefined();
+
+    await disconnect();
+
+    expect(mockClientInstance.quit).toHaveBeenCalledTimes(1);
+  });
+
+  it("disconnect() resolves without error when no Redis client was created (MemoryStore path)", async () => {
+    delete process.env["REDIS_URL"];
+
+    const { disconnect } = buildUploadRateLimiter();
+
+    // Should resolve cleanly — no Redis client exists.
+    await expect(disconnect()).resolves.toBeUndefined();
+
+    // quit() must not have been called on any Redis instance.
+    expect(RedisMock).not.toHaveBeenCalled();
+  });
+
+  it("disconnect() resolves without error when storeOverride was supplied", async () => {
+    const customStore = new RedisStore({ sendCommand: vi.fn() });
+    vi.clearAllMocks();
+
+    const { disconnect } = buildUploadRateLimiter(customStore);
+
+    // No internal Redis client should have been created.
+    expect(RedisMock).not.toHaveBeenCalled();
+
+    // disconnect() should still be safe to call.
+    await expect(disconnect()).resolves.toBeUndefined();
+  });
+
+  it("disconnect() can be called multiple times without throwing", async () => {
+    process.env["REDIS_URL"] = "redis://localhost:6379";
+
+    const { disconnect } = buildUploadRateLimiter();
+
+    await expect(disconnect()).resolves.toBeUndefined();
+    await expect(disconnect()).resolves.toBeUndefined();
   });
 });
