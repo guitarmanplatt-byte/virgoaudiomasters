@@ -163,7 +163,59 @@ describe("buildUploadRateLimiter — store selection", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 4. storeOverride bypasses auto-selection
+  // 4. Malformed REDIS_URL — not a URL at all
+  // -------------------------------------------------------------------------
+  it("throws when REDIS_URL is set to a string that is not a valid URL", () => {
+    process.env["REDIS_URL"] = "not-a-url";
+
+    // The factory must throw loudly so the server crashes at startup rather
+    // than silently running without Redis (inaccurate rate-limit counters).
+    expect(() => buildUploadRateLimiter()).toThrow(/not a valid URL/i);
+
+    // No Redis client or store should have been constructed.
+    expect(RedisMock).not.toHaveBeenCalled();
+    expect(RedisStoreMock).not.toHaveBeenCalled();
+  });
+
+  it("throws when REDIS_URL has an unsupported protocol (e.g. http://)", () => {
+    process.env["REDIS_URL"] = "http://localhost:6379";
+
+    expect(() => buildUploadRateLimiter()).toThrow(/unsupported protocol/i);
+
+    expect(RedisMock).not.toHaveBeenCalled();
+    expect(RedisStoreMock).not.toHaveBeenCalled();
+  });
+
+  it("throws when REDIS_URL uses a ftp:// scheme", () => {
+    process.env["REDIS_URL"] = "ftp://cache.example.com/0";
+
+    expect(() => buildUploadRateLimiter()).toThrow(/unsupported protocol/i);
+
+    expect(RedisMock).not.toHaveBeenCalled();
+    expect(RedisStoreMock).not.toHaveBeenCalled();
+  });
+
+  it("accepts redis+sentinel:// as a valid scheme", () => {
+    process.env["REDIS_URL"] = "redis+sentinel://sentinel-host:26379/mymaster/0";
+
+    // Should not throw — sentinel URLs are a supported ioredis scheme.
+    expect(() => buildUploadRateLimiter()).not.toThrow();
+
+    expect(RedisMock).toHaveBeenCalledTimes(1);
+    expect(RedisStoreMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts rediss:// (TLS) as a valid scheme", () => {
+    process.env["REDIS_URL"] = "rediss://secure-host:6380";
+
+    expect(() => buildUploadRateLimiter()).not.toThrow();
+
+    expect(RedisMock).toHaveBeenCalledTimes(1);
+    expect(RedisStoreMock).toHaveBeenCalledTimes(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // 5. storeOverride bypasses auto-selection
   // -------------------------------------------------------------------------
   it("uses the provided storeOverride and skips Redis construction entirely", () => {
     process.env["REDIS_URL"] = "redis://localhost:6379";

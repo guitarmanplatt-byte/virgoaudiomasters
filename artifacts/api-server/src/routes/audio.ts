@@ -69,6 +69,31 @@ export function buildUploadRateLimiter(storeOverride?: InstanceType<typeof Redis
   const store: InstanceType<typeof RedisStore> | undefined = storeOverride ?? (() => {
     const redisUrl = process.env["REDIS_URL"];
     if (!redisUrl) return undefined;
+
+    // ---------------------------------------------------------------------------
+    // Validate the REDIS_URL format before handing it to ioredis.
+    // An invalid URL (e.g. "not-a-url") would cause ioredis to silently fall back
+    // or produce cryptic connection-time errors.  We crash loudly here instead so
+    // operators know immediately that the configuration is wrong.
+    // ---------------------------------------------------------------------------
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(redisUrl);
+    } catch {
+      throw new Error(
+        `[rate-limiter] REDIS_URL is not a valid URL: "${redisUrl}". ` +
+        `Fix the configuration and restart the server.`
+      );
+    }
+    const VALID_PROTOCOLS = new Set(["redis:", "rediss:", "redis+sentinel:"]);
+    if (!VALID_PROTOCOLS.has(parsedUrl.protocol)) {
+      throw new Error(
+        `[rate-limiter] REDIS_URL has an unsupported protocol "${parsedUrl.protocol}". ` +
+        `Expected one of: redis:, rediss:, redis+sentinel:. ` +
+        `Fix the configuration and restart the server.`
+      );
+    }
+
     redisClient = new Redis(redisUrl);
 
     // Attach an error listener so that a dropped connection (network blip,
