@@ -78,6 +78,9 @@ export function PluginWindow({ definition }: PluginWindowProps) {
   const [demoPhase, setDemoPhase] = useState<'idle' | 'dry' | 'wet'>('idle');
   const demoPhaseRef = useRef<'idle' | 'dry' | 'wet'>('idle');
   const [demoLoading, setDemoLoading] = useState(false);
+  // Manual Dry/Wet toggle — visible once a demo clip is loaded
+  const [isDemoLoaded, setIsDemoLoaded] = useState(false);
+  const [demoAb, setDemoAb] = useState<'dry' | 'wet'>('dry');
 
   // User presets
   const { data: userPresets } = useListPluginPresets({ pluginId: definition.id });
@@ -95,6 +98,7 @@ export function PluginWindow({ definition }: PluginWindowProps) {
         // Dry phase ended → switch to processed (wet) playback
         demoPhaseRef.current = 'wet';
         setDemoPhase('wet');
+        setDemoAb('wet');
         engine.setBypass(false);
         setBypass(false);
         engine.seek(0);
@@ -159,6 +163,15 @@ export function PluginWindow({ definition }: PluginWindowProps) {
     toast.success(`Copied ${slot} → ${other}`);
   };
 
+  // Toggle between dry (bypass on) and wet (bypass off) while keeping playback position.
+  const toggleDemoAb = (target: 'dry' | 'wet') => {
+    if (target === demoAb) return;
+    setDemoAb(target);
+    const newBypass = target === 'dry';
+    setBypass(newBypass);
+    engine.setBypass(newBypass);
+  };
+
   // ── Transport ─────────────────────────────────────────────────────────────
   const handleFile = async (file: File) => {
     try {
@@ -168,6 +181,7 @@ export function PluginWindow({ definition }: PluginWindowProps) {
       setPosition(0);
       setIsPlaying(false);
       setAudioReady(true);
+      setIsDemoLoaded(false); // reset demo toggle when a fresh file is loaded
       engine.setParams(params);
       engine.setBypass(bypass);
       engine.setInputGainDb(inGainDb);
@@ -193,6 +207,8 @@ export function PluginWindow({ definition }: PluginWindowProps) {
       const name = definition.demoClip.split('/').pop() ?? 'demo.wav';
       const file = new File([blob], name, { type: blob.type || 'audio/wav' });
       await handleFile(file);
+      setIsDemoLoaded(true);
+      setDemoAb('dry');
       // Phase 1: play dry (bypass on) so users hear the unprocessed signal first,
       // then onEnded automatically transitions to Phase 2 (processed).
       demoPhaseRef.current = 'dry';
@@ -534,6 +550,30 @@ export function PluginWindow({ definition }: PluginWindowProps) {
                 style={{ background: demoPhase === 'dry' ? '#666' : '#E8A030' }} />
             </span>
             {demoPhase === 'dry' ? 'DRY' : 'PROCESSED'}
+          </div>
+        )}
+
+        {/* Manual Dry / Wet toggle — visible once a demo clip is loaded */}
+        {isDemoLoaded && (
+          <div
+            className="flex items-center rounded-sm overflow-hidden border border-[#333]"
+            title="Toggle between the unprocessed (Dry) and processed (Wet) signal"
+          >
+            {(['dry', 'wet'] as const).map((ab) => (
+              <button
+                key={ab}
+                onClick={() => toggleDemoAb(ab)}
+                className={`px-3 h-7 text-[10px] font-bold uppercase tracking-widest transition-colors ${
+                  demoAb === ab
+                    ? ab === 'dry'
+                      ? 'bg-[#2A2A2A] text-white'
+                      : 'bg-[#E8A030] text-black'
+                    : 'bg-[#181818] text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {ab === 'dry' ? 'Dry' : 'Wet'}
+              </button>
+            ))}
           </div>
         )}
 
