@@ -1,0 +1,125 @@
+name: Build VST3 (Windows x64)
+
+on:
+  workflow_dispatch:          # run manually from the Actions tab
+  push:
+    paths:
+      - 'plugins-native/**'   # rebuild whenever plugin source changes
+
+jobs:
+  build:
+    name: Build all VA VST3 plugins
+    runs-on: windows-latest   # full MSVC + Windows SDK
+
+    steps:
+      # ── 1. Checkout ───────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # ── 2. Cache JUCE source (saves ~3 min on repeated runs) ─────────────────
+      - name: Cache JUCE
+        uses: actions/cache@v4
+        with:
+          path: plugins-native/build/_deps
+          key: juce-7.0.12-${{ runner.os }}
+
+      # ── 3. Configure (CMake + MSVC generator) ────────────────────────────────
+      - name: CMake configure
+        working-directory: plugins-native
+        run: |
+          cmake -B build -S . `
+            -G "Visual Studio 17 2022" `
+            -A x64 `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DJUCE_COPY_PLUGIN_AFTER_BUILD=OFF
+
+      # ── 4. Build all targets in Release ──────────────────────────────────────
+      - name: CMake build
+        working-directory: plugins-native
+        run: |
+          cmake --build build --config Release --parallel
+
+      # ── 5. Collect all .vst3 bundles into a staging directory ────────────────
+      - name: Collect VST3 files
+        shell: pwsh
+        working-directory: plugins-native
+        run: |
+          $staging = "dist\VirgoAudioMasters-VST3-Windows-x64"
+          New-Item -ItemType Directory -Force -Path $staging | Out-Null
+
+          $vst3Dirs = Get-ChildItem -Path "build" -Recurse -Filter "*.vst3" -Directory
+          foreach ($dir in $vst3Dirs) {
+            $dest = Join-Path $staging $dir.Name
+            Write-Host "Copying $($dir.FullName) -> $dest"
+            Copy-Item -Recurse -Force $dir.FullName $dest
+          }
+
+          # Also grab any standalone .exe files if they exist
+          $exes = Get-ChildItem -Path "build" -Recurse -Filter "*_Standalone.exe"
+          foreach ($exe in $exes) {
+            Copy-Item -Force $exe.FullName $staging
+          }
+
+          Write-Host "`nStaged files:"
+          Get-ChildItem $staging | Format-Table Name, Length
+
+      # ── 6. Add an install README ──────────────────────────────────────────────
+      - name: Write install instructions
+        shell: pwsh
+        working-directory: plugins-native
+        run: |
+          $readme = @"
+          # VirgoAudioMasters VST3 Plugins — Windows x64
+
+          ## Installation
+          Copy every `.vst3` folder into your VST3 directory:
+
+              C:\Program Files\Common Files\VST3\
+
+          Then rescan plugins in your DAW (Ableton, FL Studio, Reaper, Studio One, etc.).
+
+          ## Plugins included
+          ### Mastering
+          - VA Utility        — Gain, pan, M/S width, harmonic drive
+          - VA Compressor     — Soft-knee, program-dependent auto-release, parallel mix
+          - VA Dynamic EQ     — 8-band parametric EQ with per-band dynamics
+          - VA Exciter        — 3-band harmonic saturation (Warm / Tape / Tube / Retro)
+          - VA Imager         — 3-band M/S width + Haas stereoize
+          - VA Maximizer      — Look-ahead brickwall limiter with LUFS targeting
+          - VA Low End Focus  — Crossover bass punch / smooth contrast shaper
+          - VA Clarity        — Adaptive high-shelf brightness enhancer
+          - VA Vintage Tape   — Wow, flutter, saturation, bandwidth (tape machine emulation)
+
+          ### Restoration
+          - VA De-clip        — Hermite reconstruction of clipped peaks
+          - VA De-click       — Transient delta detection + cubic interpolation
+          - VA De-crackle     — Sliding median filter for vinyl crackle
+          - VA De-hum         — IIR notch bank (50 / 60 Hz + up to 5 harmonics)
+          - VA De-noise       — 4-band adaptive spectral gate
+          - VA De-plosive     — LP/HP energy detection + fast ducking gate
+
+          ## Built with
+          JUCE 7.0.12 · MSVC · Windows x64 · VST3 SDK
+          "@
+          $readme | Out-File -Encoding utf8 "dist\VirgoAudioMasters-VST3-Windows-x64\INSTALL.txt"
+
+      # ── 7. Zip everything ─────────────────────────────────────────────────────
+      - name: Zip distribution
+        shell: pwsh
+        working-directory: plugins-native
+        run: |
+          Compress-Archive `
+            -Path "dist\VirgoAudioMasters-VST3-Windows-x64" `
+            -DestinationPath "dist\VirgoAudioMasters-VST3-Windows-x64.zip" `
+            -Force
+
+      # ── 8. Upload artifact (90-day retention) ─────────────────────────────────
+      - name: Upload VST3 ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: VirgoAudioMasters-VST3-Windows-x64
+          path: plugins-native/dist/VirgoAudioMasters-VST3-Windows-x64.zip
+          retention-days: 90
+          if-no-files-found: error
