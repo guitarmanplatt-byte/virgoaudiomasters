@@ -1,0 +1,55 @@
+Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+Run actions/setup-node@v4
+Attempting to download 20...
+(node:2269) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Acquiring 20.20.2 - x64 from https://github.com/actions/node-versions/releases/download/20.20.2-23521894959/node-20.20.2-linux-x64.tar.gz
+Extracting ...
+/usr/bin/tar xz --strip 1 --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/8466cb61-8078-4568-a2a1-dfc0521b431e -f /home/runner/work/_temp/40784cb5-b62c-41c5-bae6-919751046696
+Adding to the cache ...
+Environment details
+/home/runner/setup-pnpm/node_modules/.bin/pnpm store path --silent
+warn: This version of pnpm requires at least Node.js v22.13
+warn: The current version of Node.js is v20.20.2
+warn: Visit https://r.pnpm.io/comp to see the list of past pnpm versions with respective Node.js version support.
+node:internal/modules/cjs/loader:1031
+      throw new ERR_UNKNOWN_BUILTIN_MODULE(request);
+            ^
+
+Error [ERR_UNKNOWN_BUILTIN_MODULE]: No such built-in module: node:sqlite
+    at Module._load (node:internal/modules/cjs/loader:1031:13)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+    at require (node:internal/modules/helpers:182:18)
+    at ../store/index/lib/index.js (file:///home/runner/setup-pnpm/node_modules/.pnpm/pnpm@11.18.0/node_modules/pnpm/dist/pnpm.mjs:100516:25)
+    at __init (file:///home/runner/setup-pnpm/node_modules/.pnpm/pnpm@11.18.0/node_modules/pnpm/dist/pnpm.mjs:17:58)
+    at ../resolving/npm-resolver/lib/index.js (file:///home/runner/setup-pnpm/node_modules/.pnpm/pnpm@11.18.0/node_modules/pnpm/dist/pnpm.mjs:105667:5)
+    at __init (file:///home/runner/setup-pnpm/node_modules/.pnpm/pnpm@11.18.0/node_modules/pnpm/dist/pnpm.mjs:17:58)
+    at ../workspace/projects-graph/lib/index.js (file:///home/runner/setup-pnpm/node_modules/.pnpm/pnpm@11.18.0/node_modules/pnpm/dist/pnpm.mjs:105806:5)
+    at __init (file:///home/runner/setup-pnpm/node_modules/.pnpm/pnpm@11.18.0/node_modules/pnpm/dist/pnpm.mjs:17:58)
+    at ../workspace/projects-filter/lib/index.js (file:///home/runner/setup-pnpm/node_modules/.pnpm/pnpm@11.18.0/node_modules/pnpm/dist/pnpm.mjs:107210:5) {
+  code: 'ERR_UNKNOWN_BUILTIN_MODULE'
+}
+
+Node.js v20.20.2
+Error: warn: This version of pnpm requires at least Node.js v22.13
+warn: The current version of Node.js is v20.20.2
+warn: Visit https://r.pnpm.io/comp to see the list of past pnpm versions with respective Node.js version support.
+node:internal/modules/cjs/loader:1031
+      throw new ERR_UNKNOWN_BUILTIN_MODULE(request);
+            ^
+
+Error [ERR_UNKNOWN_BUILTIN_MODULE]: No such built-in module: node:sqlite
+    at Module._load (node:internal/modules/cjs/loader:1031:13)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+    at require (node:internal/modules/helpers:182:18)
+    at ../store/index/lib/index.js (file:///home/runner/setup-pnpm/node_modules/.pnpm/pnpm@11.18.0/node_modules/pnpm/dist/pnpm.mjs:100516:25)
+    at __init (file:///home/runner/setup-pnpm/node_modules/.pnpm/pnpm@11.18.0/node_modules/pnpm/dist/pnpm.mjs:17:58)
+    at ../resolving/npm-resolver/lib/index.js (file:///home/runner/setup-pnpm/node_modules/.pnpm/pnpm@11.18.0/node_modules/pnpm/dist/pnpm.mjs:105667:5)
+    at __init (file:///home/runner/setup-pnpm/node_modules/.pnpm/pnpm@11.18.0/node_modules/pnpm/dist/pnpm.mjs:17:58)
+    at ../workspace/projects-graph/lib/index.js (file:///home/runner/setup-pnpm/node_modules/.pnpm/pnpm@11.18.0/node_modules/pnpm/dist/pnpm.mjs:105806:5)
+    at __init (file:///home/runner/setup-pnpm/node_modules/.pnpm/pnpm@11.18.0/node_modules/pnpm/dist/pnpm.mjs:17:58)
+    at ../workspace/projects-filter/lib/index.js (file:///home/runner/setup-pnpm/node_modules/.pnpm/pnpm@11.18.0/node_modules/pnpm/dist/pnpm.mjs:107210:5) {
+  code: 'ERR_UNKNOWN_BUILTIN_MODULE'
+}
+
+Node.js v20.20.2
