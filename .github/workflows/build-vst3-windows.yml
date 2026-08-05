@@ -18,28 +18,35 @@ jobs:
         with:
           fetch-depth: 1
 
-      # ── 2. Cache JUCE source (saves ~3 min on repeated runs) ─────────────────
+      # ── 2. Set up MSVC dev environment (makes cl.exe + Ninja visible to CMake) ─
+      - name: Set up MSVC dev environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      # ── 3. Cache JUCE source (saves ~3 min on repeated runs) ─────────────────
       - name: Cache JUCE
         uses: actions/cache@v4
         with:
           path: plugins-native/build/_deps
           key: juce-7.0.12-${{ runner.os }}
 
-      # ── 3. Configure (CMake + MSVC generator) ────────────────────────────────
+      # ── 4. Configure (Ninja + MSVC — no VS IDE required) ─────────────────────
       - name: CMake configure
         working-directory: plugins-native
         run: |
           cmake -B build -S . `
-            -G "Visual Studio 17 2022" `
-            -A x64 `
+            -G Ninja `
             -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_C_COMPILER=cl `
+            -DCMAKE_CXX_COMPILER=cl `
             -DJUCE_COPY_PLUGIN_AFTER_BUILD=OFF
 
-      # ── 4. Build all targets in Release ──────────────────────────────────────
+      # ── 5. Build all targets ──────────────────────────────────────────────────
       - name: CMake build
         working-directory: plugins-native
         run: |
-          cmake --build build --config Release --parallel
+          cmake --build build --parallel
 
       # ── 5. Collect all .vst3 bundles into a staging directory ────────────────
       - name: Collect VST3 files
