@@ -12,7 +12,7 @@ namespace {
         if (auto xml = juce::AudioProcessor::getXmlFromBinary(data, size))
             if (xml->hasTagName(apvts.state.getType())) apvts.replaceState(juce::ValueTree::fromXml(*xml));
     }
-    juce::String pId(const char* name, int band) { return juce::String("b") + band + name; }
+    juce::String pId(const char* name, int band) { return juce::String("b") + juce::String(band) + name; }
     static const float kDefaultFreqs[VADynamicEQProcessor::kNumBands] = {60,150,400,1000,2500,6000,10000,15000};
     // Filter type enum: 0=peaking, 1=lowshelf, 2=highshelf, 3=highpass, 4=lowpass
     static const Virgo::FType kFTypes[] = {
@@ -86,14 +86,14 @@ void VADynamicEQProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
         const bool  dynOn   = *apvts.getRawParameterValue(pId("dyn",b)) > 0.5f;
 
         // Detection bandpass
-        const juce::String detKey = juce::String(freq) + "/" + q;
+        const juce::String detKey = juce::String(freq) + "/" + juce::String(q);
         if (detKey != bs.lastDetKey) {
             bs.det.c = Virgo::calcBiquad(Virgo::FType::BandPass, freq, 0.0f, std::max(0.3f, q), sr);
             bs.lastDetKey = detKey;
         }
 
         const float applied = gain + (dynOn ? bs.dynDb : 0.0f);
-        const juce::String fkey = juce::String(typeIdx) + "/" + freq + "/" + q;
+        const juce::String fkey = juce::String(typeIdx) + "/" + juce::String(freq) + "/" + juce::String(q);
         if (fkey != bs.lastFilterKey || std::abs(applied - bs.lastAppliedGain) > 0.1f) {
             bs.filt.c = Virgo::calcBiquad(kFTypes[typeIdx], freq, applied, q, sr);
             bs.lastFilterKey = fkey;
