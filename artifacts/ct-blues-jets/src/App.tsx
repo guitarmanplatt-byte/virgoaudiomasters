@@ -148,18 +148,6 @@ export default function App() {
         </div>
       </section>
 
-      {/* 4. Tracklist */}
-      <section className="py-32 px-6 max-w-5xl mx-auto grid md:grid-cols-2 gap-16 md:gap-8">
-        <div>
-          <FadeIn>
-          </FadeIn>
-        </div>
-        <div>
-          <FadeIn delay={0.2}>
-          </FadeIn>
-        </div>
-      </section>
-
       {/* 6. Outro & CTA */}
       <section className="py-40 px-6 text-center flex flex-col items-center justify-center bg-background relative z-10">
         <FadeIn>
