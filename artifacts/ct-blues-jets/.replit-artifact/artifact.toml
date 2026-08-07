@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/ct-blues-jets/"
+title = "Collin Taylor & the Blues Jets — Album Landing Page"
+description = "A promotional landing page for the album 'Boars Head, Torn Eyes, And The Cluck Of Sick Gore' by Collin Taylor & the Blues Jets. Full-bleed Americana hero image, artist name, album title, YouTube listen CTA, and a moody scrolling layout in burnt amber/sepia tones with Playfair Display typography."
+version = "1.0.0"
+id = "artifacts/ct-blues-jets"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/ct-blues-jets/" ]
+localPort = 24599
+
+[services.development]
+run = "pnpm --filter @workspace/ct-blues-jets run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/ct-blues-jets", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/ct-blues-jets/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24599"
+BASE_PATH = "/ct-blues-jets/"
