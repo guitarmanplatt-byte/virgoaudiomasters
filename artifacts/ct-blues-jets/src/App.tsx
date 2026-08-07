@@ -160,15 +160,6 @@ export default function App() {
         </div>
       </section>
 
-      {/* 5. Ghost Country */}
-      <section className="relative h-[90vh] w-full flex items-end pb-32">
-        <ParallaxImage src={GHOST_IMG} alt="Weathered hands on guitar strings" className="absolute inset-0" />
-        <div className="relative z-10 px-6 max-w-2xl mx-auto md:mx-12 lg:mx-32">
-          <FadeIn>
-          </FadeIn>
-        </div>
-      </section>
-
       {/* 6. Outro & CTA */}
       <section className="py-40 px-6 text-center flex flex-col items-center justify-center bg-background relative z-10">
         <FadeIn>
