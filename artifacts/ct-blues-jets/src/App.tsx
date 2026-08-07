@@ -163,7 +163,6 @@ export default function App() {
       {/* 5. Ghost Country */}
       <section className="relative h-[90vh] w-full flex items-end pb-32">
         <ParallaxImage src={GHOST_IMG} alt="Weathered hands on guitar strings" className="absolute inset-0" />
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
         <div className="relative z-10 px-6 max-w-2xl mx-auto md:mx-12 lg:mx-32">
           <FadeIn>
           </FadeIn>
