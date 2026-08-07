@@ -152,7 +152,6 @@ export default function App() {
       <section className="py-32 px-6 max-w-5xl mx-auto grid md:grid-cols-2 gap-16 md:gap-8">
         <div>
           <FadeIn>
-            <h4 className="text-sm text-primary uppercase tracking-[0.4em] mb-12">Side A — The Rot</h4>
           </FadeIn>
         </div>
         <div>
