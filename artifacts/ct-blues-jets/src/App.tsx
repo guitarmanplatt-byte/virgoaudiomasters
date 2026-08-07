@@ -204,9 +204,6 @@ export default function App() {
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
         <div className="relative z-10 px-6 max-w-2xl mx-auto md:mx-12 lg:mx-32">
           <FadeIn>
-            <p className="text-xl md:text-2xl text-foreground/80 leading-relaxed italic mb-8">
-              "It sounds like Townes Van Zandt woke up in a shallow grave, dusted himself off, and found a guitar with three strings left."
-            </p>
           </FadeIn>
         </div>
       </section>
