@@ -135,19 +135,6 @@ export default function App() {
         </FadeIn>
       </section>
 
-      {/* 3. Dark River */}
-      <section className="relative h-[80vh] w-full flex items-center justify-center">
-        <ParallaxImage src={RIVER_IMG} alt="Moonlit river at night" className="absolute inset-0" />
-        <div className="relative z-10 px-6 max-w-4xl text-center">
-          <FadeIn>
-            <h3 className="text-3xl md:text-5xl font-serif text-foreground leading-tight drop-shadow-xl">
-              "The water's too deep to stand,<br />
-              <span className="text-primary italic">and too cold to swim.</span>"
-            </h3>
-          </FadeIn>
-        </div>
-      </section>
-
       {/* 6. Outro & CTA */}
       <section className="py-40 px-6 text-center flex flex-col items-center justify-center bg-background relative z-10">
         <FadeIn>
