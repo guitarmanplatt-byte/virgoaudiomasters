@@ -189,10 +189,6 @@ export default function App() {
                 <span className="text-muted-foreground font-serif">07</span>
                 <span>Empty Bottle Lullaby</span>
               </li>
-              <li className="flex gap-6 border-b border-border/30 pb-4">
-                <span className="text-muted-foreground font-serif">08</span>
-                <span>No Train Coming</span>
-              </li>
             </ul>
           </FadeIn>
         </div>
