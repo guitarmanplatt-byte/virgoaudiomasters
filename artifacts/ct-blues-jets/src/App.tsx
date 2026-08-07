@@ -175,7 +175,6 @@ export default function App() {
         </div>
         <div>
           <FadeIn delay={0.2}>
-            <h4 className="text-sm text-primary uppercase tracking-[0.4em] mb-12">Side B — The Ruin</h4>
           </FadeIn>
         </div>
       </section>
