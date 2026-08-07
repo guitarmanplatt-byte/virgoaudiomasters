@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<title>Ad – Ghost Country</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100vw; height: 100vh;
+    overflow: hidden;
+    background: #0d0b09;
+  }
+  .ad {
+    position: relative;
+    width: 100vw; height: 100vh;
+    overflow: hidden;
+  }
+  .hero-img {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    object-position: center top;
+    filter: sepia(30%) contrast(1.08);
+  }
+  .gradient {
+    position: absolute; inset: 0;
+    background: linear-gradient(
+      to bottom,
+      rgba(13,11,9,0.6) 0%,
+      rgba(13,11,9,0.0) 20%,
+      rgba(13,11,9,0.0) 40%,
+      rgba(13,11,9,0.9) 68%,
+      rgba(13,11,9,0.99) 100%
+    );
+  }
+  /* Side vignette for intimacy */
+  .vignette {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(13,11,9,0.6) 100%);
+  }
+  .content {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    padding: 6vh 7vw 5vh;
+    display: flex;
+    flex-direction: column;
+    gap: 1.4vh;
+  }
+  .label {
+    font-family: 'EB Garamond', Georgia, serif;
+    font-weight: 500;
+    font-size: 2.2vw;
+    color: #b09070;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .artist {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-weight: 900;
+    font-size: 7.5vw;
+    line-height: 1.0;
+    color: #ede0cc;
+    letter-spacing: -0.01em;
+  }
+  .album {
+    font-family: 'EB Garamond', Georgia, serif;
+    font-style: italic;
+    font-size: 2.8vw;
+    line-height: 1.3;
+    color: #b8a48a;
+    max-width: 72vw;
+    margin-top: 0.5vh;
+  }
+  .listen {
+    font-family: 'EB Garamond', Georgia, serif;
+    font-style: italic;
+    font-size: 1.9vw;
+    color: rgba(176,144,112,0.6);
+    margin-top: 1.5vh;
+    letter-spacing: 0.08em;
+  }
+  .top-bar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    padding: 4vh 7vw;
+    display: flex;
+    align-items: center;
+  }
+  .logo-mark {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-weight: 700;
+    font-size: 2.4vw;
+    color: rgba(237,224,204,0.85);
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+<div class="ad">
+  <img class="hero-img" src="/__mockup/images/ad-ghost-country.jpg" alt="Weathered hands on guitar">
+  <div class="gradient"></div>
+  <div class="vignette"></div>
+  <div class="top-bar">
+    <span class="logo-mark">CT&BJ</span>
+  </div>
+  <div class="content">
+    <span class="label">New Album</span>
+    <div class="artist">Collin Taylor<br>&amp; the Blues Jets</div>
+    <div class="album">Boars Head, Torn Eyes,<br>And The Cluck Of Sick Gore</div>
+    <div class="listen">Listen Now on YouTube</div>
+  </div>
+</div>
+</body>
+</html>
