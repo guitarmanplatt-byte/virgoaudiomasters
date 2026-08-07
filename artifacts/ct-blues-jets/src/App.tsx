@@ -207,9 +207,6 @@ export default function App() {
             <p className="text-xl md:text-2xl text-foreground/80 leading-relaxed italic mb-8">
               "It sounds like Townes Van Zandt woke up in a shallow grave, dusted himself off, and found a guitar with three strings left."
             </p>
-            <p className="text-sm text-primary uppercase tracking-widest font-sans">
-              — The Rustbelt Chronicle
-            </p>
           </FadeIn>
         </div>
       </section>
