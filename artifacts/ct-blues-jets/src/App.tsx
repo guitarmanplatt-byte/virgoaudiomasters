@@ -176,20 +176,6 @@ export default function App() {
         <div>
           <FadeIn delay={0.2}>
             <h4 className="text-sm text-primary uppercase tracking-[0.4em] mb-12">Side B — The Ruin</h4>
-            <ul className="space-y-6 text-xl text-foreground font-sans">
-              <li className="flex gap-6 border-b border-border/30 pb-4">
-                <span className="text-muted-foreground font-serif">05</span>
-                <span>The Cluck of Sick Gore</span>
-              </li>
-              <li className="flex gap-6 border-b border-border/30 pb-4">
-                <span className="text-muted-foreground font-serif">06</span>
-                <span>Rust on the Wire</span>
-              </li>
-              <li className="flex gap-6 border-b border-border/30 pb-4">
-                <span className="text-muted-foreground font-serif">07</span>
-                <span>Empty Bottle Lullaby</span>
-              </li>
-            </ul>
           </FadeIn>
         </div>
       </section>
