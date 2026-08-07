@@ -153,24 +153,6 @@ export default function App() {
         <div>
           <FadeIn>
             <h4 className="text-sm text-primary uppercase tracking-[0.4em] mb-12">Side A — The Rot</h4>
-            <ul className="space-y-6 text-xl text-foreground font-sans">
-              <li className="flex gap-6 border-b border-border/30 pb-4">
-                <span className="text-muted-foreground font-serif">01</span>
-                <span>Spitting Blood at the Moon</span>
-              </li>
-              <li className="flex gap-6 border-b border-border/30 pb-4">
-                <span className="text-muted-foreground font-serif">02</span>
-                <span>Gravel and Glass</span>
-              </li>
-              <li className="flex gap-6 border-b border-border/30 pb-4">
-                <span className="text-muted-foreground font-serif">03</span>
-                <span>Boars Head</span>
-              </li>
-              <li className="flex gap-6 border-b border-border/30 pb-4">
-                <span className="text-muted-foreground font-serif">04</span>
-                <span>Torn Eyes</span>
-              </li>
-            </ul>
           </FadeIn>
         </div>
         <div>
