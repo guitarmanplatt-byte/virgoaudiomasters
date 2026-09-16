@@ -40,6 +40,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_C_COMPILER=cl `
             -DCMAKE_CXX_COMPILER=cl `
+            -DBUILD_TESTING=ON `
             -DJUCE_COPY_PLUGIN_AFTER_BUILD=OFF
 
       # ── 5. Build all targets ──────────────────────────────────────────────────
@@ -47,6 +48,41 @@ jobs:
         working-directory: plugins-native
         run: |
           cmake --build build --parallel
+
+      - name: Verify Silver Opto DSP, controls, and presets
+        working-directory: plugins-native
+        run: |
+          ctest --test-dir build -C Release --output-on-failure -R VASilverOptoSignalTests
+
+      - name: Validate Silver Opto VST3 in a host
+        shell: pwsh
+        working-directory: plugins-native
+        run: |
+          $plugin = Get-ChildItem -Path "build" -Recurse -Filter "VA Silver Opto.vst3" -Directory |
+            Select-Object -First 1
+          if (-not $plugin) {
+            throw "VA Silver Opto.vst3 was not produced"
+          }
+
+          Invoke-WebRequest `
+            -Uri "https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Windows.zip" `
+            -OutFile "pluginval.zip"
+          Expand-Archive "pluginval.zip" -DestinationPath "pluginval" -Force
+          $validator = Get-ChildItem -Path "pluginval" -Recurse -Filter "pluginval.exe" |
+            Select-Object -First 1
+          if (-not $validator) {
+            throw "pluginval.exe was not found in the downloaded archive"
+          }
+
+          & $validator.FullName `
+            --strictness-level 5 `
+            --validate-in-process `
+            --skip-gui-tests `
+            --timeout-ms 30000 `
+            --validate $plugin.FullName
+          if ($LASTEXITCODE -ne 0) {
+            throw "pluginval rejected VA Silver Opto (exit code $LASTEXITCODE)"
+          }
 
       # ── 5. Collect all .vst3 bundles into a staging directory ────────────────
       - name: Collect VST3 files

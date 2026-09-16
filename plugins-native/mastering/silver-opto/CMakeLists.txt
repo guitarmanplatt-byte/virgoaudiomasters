@@ -21,3 +21,18 @@ target_link_libraries(VASilverOpto
     PRIVATE VirgoShared juce::juce_audio_utils juce::juce_dsp
     PUBLIC  juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
 juce_generate_juce_header(VASilverOpto)
+
+if (BUILD_TESTING)
+    juce_add_console_app(VASilverOptoTests
+        PRODUCT_NAME "VA Silver Opto Tests")
+
+    target_sources(VASilverOptoTests PRIVATE
+        PluginProcessor.cpp
+        SilverOptoTests.cpp)
+    target_include_directories(VASilverOptoTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(VASilverOptoTests
+        PRIVATE VirgoShared juce::juce_audio_utils juce::juce_dsp
+        PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+
+    add_test(NAME VASilverOptoSignalTests COMMAND VASilverOptoTests)
+endif()
