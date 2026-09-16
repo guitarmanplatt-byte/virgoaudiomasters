@@ -153,6 +153,7 @@ PLUGINS
     VA Low End Focus  — Bass crossover punch/smooth shaper
     VA Clarity        — Adaptive high-shelf brightness
     VA Vintage Tape   — Wow, flutter, saturation, tape emulation
+    VA Silver Opto    — Program-dependent optical/tube compression, silver hardware-style UI
 
   Restoration:
     VA De-clip        — Hermite reconstruction of clipped peaks

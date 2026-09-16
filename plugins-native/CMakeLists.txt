@@ -37,6 +37,7 @@ add_subdirectory(mastering/maximizer)
 add_subdirectory(mastering/low-end-focus)
 add_subdirectory(mastering/clarity)
 add_subdirectory(mastering/vintage-tape)
+add_subdirectory(mastering/silver-opto)
 
 # ── Restoration plugins ───────────────────────────────────────────────────────
 add_subdirectory(restoration/de-clip)

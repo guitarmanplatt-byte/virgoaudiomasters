@@ -93,6 +93,7 @@ Then rescan plugins in your DAW (Ableton Live, FL Studio, Reaper, Studio One, Cu
 | VA Low End Focus | Crossover bass punch / smooth contrast shaper |
 | VA Clarity | Adaptive high-shelf brightness enhancer |
 | VA Vintage Tape | Wow, flutter, saturation + bandwidth (tape emulation) |
+| VA Silver Opto | Program-dependent optical/tube compression with silver hardware-style UI |
 
 ### Restoration
 | Plugin | Description |
