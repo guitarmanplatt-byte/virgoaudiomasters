@@ -79,7 +79,7 @@ Then rescan plugins in your DAW (Ableton Live, FL Studio, Reaper, Studio One, Cu
 
 ---
 
-## Plugins included (15 total)
+## Plugins included (16 total)
 
 ### Mastering
 | Plugin | Description |

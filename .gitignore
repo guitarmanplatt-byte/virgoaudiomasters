@@ -5,6 +5,7 @@ dist
 tmp
 out-tsc
 *.tsbuildinfo
+/plugins-native/build/
 .expo
 .expo-shared
 

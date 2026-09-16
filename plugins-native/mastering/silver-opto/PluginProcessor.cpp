@@ -121,9 +121,7 @@ namespace
             : juce::AudioProcessorEditor(processor),
               mProcessor(processor),
               mGainAttachment(processor.apvts, "gain", mGain),
-              mPeakReductionAttachment(processor.apvts, "peakReduction", mPeakReduction),
-              mModeAttachment(processor.apvts, "mode", mModeBox),
-              mMeterAttachment(processor.apvts, "meter", mMeterBox)
+              mPeakReductionAttachment(processor.apvts, "peakReduction", mPeakReduction)
         {
             setLookAndFeel(&mLookAndFeel);
             setOpaque(true);
@@ -138,6 +136,10 @@ namespace
             mMeterBox.addItem("GAIN REDUCTION", 1);
             mMeterBox.addItem("OUTPUT LEVEL", 2);
             mMeterBox.setJustificationType(juce::Justification::centred);
+            mModeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+                processor.apvts, "mode", mModeBox);
+            mMeterAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+                processor.apvts, "meter", mMeterBox);
 
             mPresetBox.addItem("-- FACTORY PRESETS --", 1);
             for (int i = 0; i < processor.getNumPrograms(); ++i)
@@ -275,8 +277,8 @@ namespace
         juce::ComboBox mPresetBox;
         juce::AudioProcessorValueTreeState::SliderAttachment mGainAttachment;
         juce::AudioProcessorValueTreeState::SliderAttachment mPeakReductionAttachment;
-        juce::AudioProcessorValueTreeState::ComboBoxAttachment mModeAttachment;
-        juce::AudioProcessorValueTreeState::ComboBoxAttachment mMeterAttachment;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> mModeAttachment;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> mMeterAttachment;
     };
 }
 
@@ -345,6 +347,7 @@ void VASilverOptoProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
     const float fastRelease = Virgo::envCoef(60.0f, static_cast<float>(mSampleRate));
     const float slowRelease = Virgo::envCoef(1000.0f, static_cast<float>(mSampleRate));
     const float gainRelease = Virgo::envCoef(120.0f, static_cast<float>(mSampleRate));
+    const float meterDecayPerSample = 24.0f / static_cast<float>(mSampleRate);
 
     for (int i = 0; i < numSamples; ++i)
     {
@@ -384,10 +387,12 @@ void VASilverOptoProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
         if (buffer.getNumChannels() > 1)
             outR[i] = outSampleR;
 
-        mInputMeter = std::max(Virgo::linToDb(std::max(std::abs(dryL), std::abs(dryR))),
-                               mInputMeter * 0.9996f);
-        mOutputMeter = std::max(Virgo::linToDb(std::max(std::abs(outSampleL), std::abs(outSampleR))),
-                                mOutputMeter * 0.9996f);
+        mInputMeter = std::max(-80.0f,
+            std::max(Virgo::linToDb(std::max(std::abs(dryL), std::abs(dryR))),
+                     mInputMeter - meterDecayPerSample));
+        mOutputMeter = std::max(-80.0f,
+            std::max(Virgo::linToDb(std::max(std::abs(outSampleL), std::abs(outSampleR))),
+                     mOutputMeter - meterDecayPerSample));
     }
 
     mInputMeterDb.store(mInputMeter);

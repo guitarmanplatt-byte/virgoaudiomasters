@@ -1,6 +1,6 @@
 # VirgoAudioMasters — Native Plugin Suite
 
-14 VST3/AU mastering and restoration plugins built with [JUCE](https://juce.com).
+16 VST3/AU mastering and restoration plugins built with [JUCE](https://juce.com).
 DSP algorithms are faithful C++ ports of the browser plugin suite.
 
 ---
@@ -76,7 +76,7 @@ Standalone executables land in `build/mastering/<name>/<name>_artefacts/Standalo
 
 ## Plugin list
 
-### Mastering (8)
+### Mastering (10)
 | Plugin | ID | Description |
 |--------|----|-------------|
 | VA Utility | `VaUt` | Gain, pan, M/S width, drive |
@@ -87,6 +87,8 @@ Standalone executables land in `build/mastering/<name>/<name>_artefacts/Standalo
 | VA Maximizer | `VaMx` | Look-ahead brickwall limiter |
 | VA Low End Focus | `VaLe` | Bass punch vs. smooth contrast |
 | VA Clarity | `VaCl` | Adaptive spectral brightness enhancer |
+| VA Vintage Tape | `VaVT` | Wow, flutter, saturation, bandwidth (tape emulation) |
+| VA Silver Opto | `VaSo` | Program-dependent optical/tube compressor with silver hardware-style UI |
 
 ### Restoration (6)
 | Plugin | ID | Description |
