@@ -1,2 +1,3 @@
 - [VirgoAudioMasters architecture](virgo-audio-masters.md) — monorepo with api-server, virgo-web (React+Vite), virgo-mobile (Expo); OpenAPI codegen; Drizzle+Postgres; static EQ/genre data.
 - [Plugin suite framework](plugin-suite-framework.md) — registerPlugin + kernelCode-in-worklet contract; worklet must stay a static file (blob URLs hang); engine timeouts/fallbacks for headless browsers.
+- [GitHub workflow publishing](github-workflow-publishing.md) — updating Actions workflow files requires explicit workflow permission in addition to repository write access.
