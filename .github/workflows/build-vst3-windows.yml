@@ -74,14 +74,23 @@ jobs:
             throw "pluginval.exe was not found in the downloaded archive"
           }
 
-          & $validator.FullName `
-            --strictness-level 5 `
-            --validate-in-process `
-            --skip-gui-tests `
-            --timeout-ms 30000 `
-            --validate $plugin.FullName
-          if ($LASTEXITCODE -ne 0) {
-            throw "pluginval rejected VA Silver Opto (exit code $LASTEXITCODE)"
+          $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+          $startInfo.FileName = $validator.FullName
+          $startInfo.UseShellExecute = $false
+          foreach ($argument in @(
+            "--strictness-level", "5",
+            "--validate-in-process",
+            "--skip-gui-tests",
+            "--timeout-ms", "30000",
+            "--validate", $plugin.FullName
+          )) {
+            $startInfo.ArgumentList.Add($argument)
+          }
+
+          $validation = [System.Diagnostics.Process]::Start($startInfo)
+          $validation.WaitForExit()
+          if ($validation.ExitCode -ne 0) {
+            throw "pluginval rejected VA Silver Opto (exit code $($validation.ExitCode))"
           }
 
       # ── 5. Collect all .vst3 bundles into a staging directory ────────────────
