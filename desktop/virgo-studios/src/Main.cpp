@@ -1,4 +1,5 @@
 #include "MainComponent.h"
+#include "EngineTests.h"
 
 class VirgoStudiosApplication final : public juce::JUCEApplication
 {
@@ -9,6 +10,12 @@ public:
 
     void initialise(const juce::String& commandLine) override
     {
+        if (commandLine.trim() == "--self-test")
+        {
+            setApplicationReturnValue(studio::runEngineTests());
+            quit();
+            return;
+        }
         window = std::make_unique<Window>();
         // CI can capture the real native interface without simulating audio hardware.
         if (commandLine.startsWith("--screenshot="))

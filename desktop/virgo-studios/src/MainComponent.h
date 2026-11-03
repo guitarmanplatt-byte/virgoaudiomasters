@@ -60,10 +60,10 @@ private:
     bool hasMeasurements = false;
     float targetRms = -18;
 
-    juce::TextButton importButton {"Import Audio"}, openButton {"Open"}, saveButton {"Save"},
+    juce::TextButton importButton {"Import Audio"}, newButton {"New"}, openButton {"Open"}, saveButton {"Save"},
         exportButton {"Export WAV"}, setupButton {"Audio Setup"}, playButton {"Play"},
         stopButton {"Stop"}, recordButton {"Record"}, analyseButton {"Analyze Audio"},
-        aiButton {"Ask Local AI"}, masterButton {"Apply Mastering"}, deleteButton {"Remove Track"};
+        aiButton {"AI Plan + Apply"}, masterButton {"Apply Mastering"}, deleteButton {"Remove Track"};
     juce::ToggleButton muteButton {"Mute"}, soloButton {"Solo"},
         repairButton {"Repair enabled"}, highPassButton {"DC / rumble filter"},
         humButton {"Hum removal"}, gateButton {"Noise gate"}, clickButton {"Click suppression"},
@@ -71,7 +71,7 @@ private:
     juce::Slider volumeSlider, panSlider, offsetSlider, trimStartSlider, trimEndSlider,
         zoomSlider, masterGainSlider, ceilingSlider, gateSlider;
     juce::ComboBox humFrequency, analysisScope, masterTarget;
-    juce::Label statusLabel, selectedLabel;
+    juce::Label statusLabel, selectedLabel, positionLabel;
     juce::TextEditor analysisReport;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };

@@ -36,8 +36,10 @@ if(WIN32)
             "$<TARGET_FILE_DIR:VirgoStudios>/Virgo Studios_Standalone.exe")
     if(DEFINED ENV{GITHUB_ACTIONS})
         add_custom_command(TARGET VirgoStudios POST_BUILD
-            COMMAND "$<TARGET_FILE:VirgoStudios>"
-                "--screenshot=${CMAKE_CURRENT_BINARY_DIR}/native-preview.png")
+            COMMAND ${CMAKE_COMMAND}
+                "-DAPP=$<TARGET_FILE:VirgoStudios>"
+                "-DPREVIEW=${CMAKE_CURRENT_BINARY_DIR}/native-preview.png"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/ci/VerifyNative.cmake")
     endif()
 endif()
 

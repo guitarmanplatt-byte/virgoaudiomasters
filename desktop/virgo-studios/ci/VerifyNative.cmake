@@ -1,0 +1,15 @@
+if(NOT DEFINED APP OR NOT DEFINED PREVIEW)
+    message(FATAL_ERROR "APP and PREVIEW paths are required")
+endif()
+execute_process(COMMAND "${APP}" --self-test RESULT_VARIABLE testResult TIMEOUT 30)
+if(NOT testResult EQUAL 0)
+    message(FATAL_ERROR "Virgo Studios engine integration tests failed: ${testResult}")
+endif()
+execute_process(COMMAND "${APP}" "--screenshot=${PREVIEW}" RESULT_VARIABLE previewResult TIMEOUT 30)
+if(NOT previewResult EQUAL 0 OR NOT EXISTS "${PREVIEW}")
+    message(FATAL_ERROR "Virgo Studios native window failed to render")
+endif()
+# The legacy native-suite workflow packages executables only. Preserve a small
+# image of the real native interface in its build log for release verification.
+execute_process(COMMAND powershell -NoProfile -Command
+    "Write-Output ('VIRGO_NATIVE_PREVIEW:' + [Convert]::ToBase64String([IO.File]::ReadAllBytes('${PREVIEW}')))")

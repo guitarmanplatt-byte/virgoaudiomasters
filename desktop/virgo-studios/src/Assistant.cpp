@@ -42,14 +42,19 @@ void MainComponent::analyseAudio()
     if (!canEdit()) return;
     auto render = analysisSnapshot();
     if (render.duration <= 0) { showStatus("Choose audio to analyze first.", true); return; }
+    const auto analysisTrack = selectedId;
+    const int scope = analysisScope.getSelectedId();
     busy = true; showStatus("Analyzing actual audio samples...");
-    worker.addJob([this, safe = juce::Component::SafePointer<MainComponent>(this), render]
+    worker.addJob([this, safe = juce::Component::SafePointer<MainComponent>(this), render, analysisTrack, scope]
     {
         const auto result = AudioEngine::analyse(render, &cancelled);
-        juce::MessageManager::callAsync([safe, result]
+        juce::MessageManager::callAsync([safe, result, analysisTrack, scope]
         {
             if (!safe) return;
-            safe->measurements = result; safe->hasMeasurements = result.samples > 0; safe->busy = false;
+            safe->measurements = result;
+            safe->hasMeasurements = result.samples > 0 && safe->analysisScope.getSelectedId() == scope
+                && (scope == 1 || safe->selectedId == analysisTrack);
+            safe->busy = false;
             safe->analysisReport.setText(analysisText(result));
             safe->showStatus("Analysis complete. Repair settings are non-destructive; master bypass is available.");
         });

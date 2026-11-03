@@ -56,6 +56,7 @@ public:
     double duration() const;
     float peakLevel() const { return outputPeak.load(); }
     bool isRecording() const { return recording.load(); }
+    bool hasRecordingOverrun() const { return recordingOverrun.load(); }
     juce::String startRecording(const juce::File&);
     juce::File stopRecording();
     double recordingOffset() const { return recordOffset; }
@@ -70,7 +71,7 @@ private:
     void audioDeviceStopped() override {}
     mutable juce::CriticalSection mutex;
     RenderState state;
-    std::atomic<bool> playing {false}, recording {false};
+    std::atomic<bool> playing {false}, recording {false}, recordingOverrun {false};
     std::atomic<double> playhead {0};
     std::atomic<float> outputPeak {0};
     juce::TimeSliceThread recordThread {"Virgo recording writer"};

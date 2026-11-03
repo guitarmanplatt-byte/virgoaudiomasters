@@ -19,6 +19,7 @@ preview. Use headphones when recording to avoid feedback.
 - Import WAV, FLAC, AIFF, and MP3 files (or drag them into the window).
 - Up to 32 tracks, with a 256 MB decoded limit per track and 512 MB per project.
 - Stereo waveform timeline, track selection, seeking, zoom and vertical scroll.
+  Double-click the transport time to seek to any `minutes:seconds` position.
 - Play/pause/stop; Space toggles playback when the main timeline has focus.
 - Per-track gain, stereo balance, mute and solo.
 - Move clips with Shift-drag or the Position control.
@@ -68,7 +69,7 @@ Source audio files are never modified by these processors.
 
 1. Install and run [Ollama](https://ollama.com/) on the Windows computer.
 2. Download a model: `ollama pull llama3.2`.
-3. Analyze audio in Virgo Studios, then choose **Ask Local AI**.
+3. Analyze audio in Virgo Studios, then choose **AI Plan + Apply**.
 
 The app calls only `http://127.0.0.1:11434/api/generate`. It sends measured
 statistics and the selected target, **not the audio file**. Full mix mode

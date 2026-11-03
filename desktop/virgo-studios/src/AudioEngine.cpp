@@ -200,7 +200,7 @@ juce::String AudioEngine::startRecording(const juce::File& file)
     output.release();
     recorder = std::make_unique<juce::AudioFormatWriter::ThreadedWriter>(writer, recordThread, 131072);
     recordingFile = file; recordOffset = playhead.load();
-    recording.store(true); playing.store(true);
+    recordingOverrun.store(false); recording.store(true); playing.store(true);
     return {};
 }
 
@@ -224,12 +224,17 @@ void AudioEngine::audioDeviceIOCallbackWithContext(const float* const* inputs, i
     juce::ScopedNoDenormals noDenormals;
     for (int ch = 0; ch < numOutputs; ++ch) if (outputs[ch]) juce::FloatVectorOperations::clear(outputs[ch], count);
     const juce::ScopedLock lock(mutex);
-    if (recording.load() && recorder && numInputs > 0 && inputs[0])
+    if (recording.load() && recorder && numInputs > 0)
     {
-        const float* recordingInputs[] = { inputs[0], numInputs > 1 && inputs[1] ? inputs[1] : inputs[0] };
-        if (!recorder->write(recordingInputs, count))
+        const float* recordingInputs[2] = {nullptr, nullptr};
+        int found = 0;
+        for (int channel = 0; channel < numInputs && found < 2; ++channel)
+            if (inputs[channel]) recordingInputs[found++] = inputs[channel];
+        if (found == 1) recordingInputs[1] = recordingInputs[0];
+        if (found == 0 || !recorder->write(recordingInputs, count))
         {
             // Preserve recorded data and stop rather than silently losing frames.
+            recordingOverrun.store(true);
             playing.store(false);
         }
     }

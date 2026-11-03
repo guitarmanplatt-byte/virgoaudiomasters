@@ -44,8 +44,46 @@ int main()
             float l = 0, r = 0;
             repair.process(l, r); master.process(l, r);
             require(l == 0 && r == 0, "Silence not silent");
+
+            studio::RepairSettings bypass;
+            repair.prepare(rate, bypass); master.prepare(rate, {});
+            l = 0.123f; r = -0.234f;
+            repair.process(l, r); master.process(l, r);
+            require(l == 0.123f && r == -0.234f, "Bypass changed samples");
+
+            studio::RepairSettings dcSettings;
+            dcSettings.enabled = true; dcSettings.highPass = true;
+            repair.prepare(rate, dcSettings);
+            for (int i = 0; i < static_cast<int>(rate); ++i)
+            {
+                l = r = 0.1f; repair.process(l, r);
+            }
+            require(std::abs(l) < 1e-4f, "DC filter did not settle");
+
+            studio::RepairSettings humSettings;
+            humSettings.enabled = true; humSettings.highPass = false; humSettings.hum = true;
+            for (const auto frequency : {50.0f, 60.0f})
+            {
+                humSettings.humHz = frequency; repair.prepare(rate, humSettings);
+                double energy = 0;
+                for (int i = 0; i < static_cast<int>(rate * 2); ++i)
+                {
+                    l = r = static_cast<float>(0.2 * std::sin(2 * studio::pi * frequency * i / rate));
+                    repair.process(l, r);
+                    if (i > rate) energy += l * l;
+                }
+                require(std::sqrt(energy / rate) < 0.01, "Hum notch suppression insufficient");
+            }
+            studio::RepairSettings gateSettings;
+            gateSettings.enabled = true; gateSettings.highPass = false; gateSettings.gate = true;
+            repair.prepare(rate, gateSettings);
+            for (int i = 0; i < static_cast<int>(rate); ++i)
+            {
+                l = r = 0.0001f; repair.process(l, r);
+            }
+            require(std::abs(l) < 1e-6f, "Noise gate failed on low-level input");
         }
-        std::cout << "PASS: RMS/peak calibration, silence, stereo linking, finite output, sample ceiling at 44.1/48/96 kHz\n";
+        std::cout << "PASS: RMS/peak calibration, silence, bypass, stereo linking, finite output, sample ceiling, DC, hum, noise gate at 44.1/48/96 kHz\n";
         return EXIT_SUCCESS;
     }
     catch (const std::exception& error)

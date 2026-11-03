@@ -46,7 +46,7 @@ MainComponent::MainComponent()
     lookAndFeel.setColour(juce::ComboBox::arrowColourId, gold);
     setLookAndFeel(&lookAndFeel);
 
-    for (auto* button : {&importButton, &openButton, &saveButton, &exportButton, &setupButton,
+    for (auto* button : {&importButton, &newButton, &openButton, &saveButton, &exportButton, &setupButton,
                         &playButton, &stopButton, &recordButton, &analyseButton,
                         &aiButton, &masterButton, &deleteButton})
         addAndMakeVisible(button);
@@ -57,10 +57,23 @@ MainComponent::MainComponent()
                         &trimEndSlider, &zoomSlider, &masterGainSlider, &ceilingSlider, &gateSlider})
         addAndMakeVisible(slider);
     for (auto* box : {&humFrequency, &analysisScope, &masterTarget}) addAndMakeVisible(box);
-    addAndMakeVisible(statusLabel); addAndMakeVisible(selectedLabel); addAndMakeVisible(analysisReport);
+    addAndMakeVisible(statusLabel); addAndMakeVisible(selectedLabel); addAndMakeVisible(positionLabel); addAndMakeVisible(analysisReport);
     statusLabel.setColour(juce::Label::textColourId, muted);
     selectedLabel.setColour(juce::Label::textColourId, gold);
     selectedLabel.setFont(juce::Font(15, juce::Font::bold));
+    positionLabel.setColour(juce::Label::textColourId, gold);
+    positionLabel.setFont(juce::Font(26));
+    positionLabel.setEditable(false, true, false);
+    positionLabel.setText("00:00.00", juce::dontSendNotification);
+    positionLabel.onTextChange = [this]
+    {
+        auto value = positionLabel.getText().trim();
+        double seconds = value.getDoubleValue();
+        if (value.contains(":"))
+            seconds = value.upToFirstOccurrenceOf(":", false, false).getDoubleValue() * 60
+                + value.fromFirstOccurrenceOf(":", false, false).getDoubleValue();
+        if (std::isfinite(seconds)) engine.seek(seconds);
+    };
     analysisReport.setMultiLine(true); analysisReport.setReadOnly(true);
     analysisReport.setColour(juce::TextEditor::backgroundColourId, background);
     analysisReport.setColour(juce::TextEditor::textColourId, text);
@@ -91,6 +104,18 @@ MainComponent::MainComponent()
     masterTarget.addItem("Loud  /  -14 dB RMS", 3); masterTarget.setSelectedId(2);
 
     importButton.onClick = [this] { importAudio(); };
+    newButton.onClick = [this]
+    {
+        if (!canEdit()) return;
+        confirmDiscard([safe = juce::Component::SafePointer<MainComponent>(this)]
+        {
+            if (!safe) return;
+            safe->engine.replaceTracks({}, {});
+            safe->selectedId.clear(); safe->projectFile = {}; safe->dirty = false;
+            safe->hasMeasurements = false; safe->scrollRow = 0; safe->refreshControls();
+            safe->showStatus("New project. Import or record audio to begin.");
+        });
+    };
     openButton.onClick = [this] { openProject(); };
     saveButton.onClick = [this] { saveProject(); };
     exportButton.onClick = [this] { exportAudio(); };
@@ -198,10 +223,8 @@ void MainComponent::paint(juce::Graphics& g)
     label(g, "STUDIOS", {134, 17, 110, 25}, 20, text, true);
     label(g, "WORKSTATION  /  0.1 PREVIEW", {24, 48, 240, 16}, 9, muted);
     const double position = engine.position();
-    const juce::String time = juce::String(static_cast<int>(position) / 60).paddedLeft('0', 2) + ":"
-        + juce::String(std::fmod(position, 60.0), 2).paddedLeft('0', 5);
-    label(g, time, {410, 77, 155, 34}, 26, gold);
-    label(g, "48 kHz export  /  24-bit WAV", {590, 88, 220, 18}, 11, muted);
+    if (getWidth() > 1280)
+        label(g, "48 kHz export  /  24-bit WAV", {590, 88, 220, 18}, 11, muted);
     label(g, "TRACKS", {22, 130, 140, 30}, 11, muted, true);
     g.setColour(border); g.drawLine(0, 128, static_cast<float>(getWidth()), 128);
     const auto area = timelineBounds();
@@ -294,9 +317,11 @@ void MainComponent::resized()
     const int right = getWidth() - 334, bottom = getHeight() - 310;
     importButton.setBounds(270, 20, 105, 30); openButton.setBounds(385, 20, 65, 30);
     saveButton.setBounds(460, 20, 65, 30); exportButton.setBounds(535, 20, 105, 30);
+    newButton.setBounds(650, 20, 65, 30);
     setupButton.setBounds(getWidth() - 144, 20, 120, 30);
     playButton.setBounds(24, 80, 110, 32); stopButton.setBounds(144, 80, 85, 32);
     recordButton.setBounds(239, 80, 110, 32); zoomSlider.setBounds(right - 210, 83, 195, 26);
+    positionLabel.setBounds(400, 77, 165, 34);
     selectedLabel.setBounds(22, bottom + 35, 240, 28);
     muteButton.setBounds(257, bottom + 35, 67, 28); soloButton.setBounds(325, bottom + 35, 65, 28);
     volumeSlider.setBounds(93, bottom + 70, 275, 24);
@@ -326,6 +351,18 @@ void MainComponent::resized()
 
 void MainComponent::timerCallback()
 {
+    if (engine.isRecording() && engine.hasRecordingOverrun())
+    {
+        const auto file = engine.stopRecording();
+        showStatus("Recording stopped: disk writer could not keep up. Partial take preserved at " + file.getFullPathName(), true);
+    }
+    analysisScope.setEnabled(!busy && !engine.isRecording());
+    if (!positionLabel.isBeingEdited())
+    {
+        const double position = engine.position();
+        positionLabel.setText(juce::String(static_cast<int>(position) / 60).paddedLeft('0', 2) + ":"
+            + juce::String(std::fmod(position, 60.0), 2).paddedLeft('0', 5), juce::dontSendNotification);
+    }
     playButton.setButtonText(engine.isPlaying() ? "Pause" : "Play");
     recordButton.setButtonText(engine.isRecording() ? "Finish Take" : "Record");
     repaint();
@@ -334,6 +371,7 @@ void MainComponent::timerCallback()
 void MainComponent::mouseDown(const juce::MouseEvent& event)
 {
     grabKeyboardFocus();
+    if (busy || engine.isRecording()) return;
     const auto area = timelineBounds();
     if (event.y >= area.getY() && event.y < area.getBottom())
     {
