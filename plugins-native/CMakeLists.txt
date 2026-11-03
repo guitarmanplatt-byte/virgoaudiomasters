@@ -28,6 +28,12 @@ add_compile_definitions(
 # ── Shared LookAndFeel + generic editor library ────────────────────────────────
 add_subdirectory(shared)
 
+# Native workstation shares JUCE, but remains an independent application.
+option(VIRGO_BUILD_STUDIOS "Build the Virgo Studios desktop workstation" ${WIN32})
+if(VIRGO_BUILD_STUDIOS)
+    add_subdirectory(../desktop/virgo-studios ${CMAKE_CURRENT_BINARY_DIR}/virgo-studios)
+endif()
+
 # ── Mastering plugins ─────────────────────────────────────────────────────────
 add_subdirectory(mastering/utility)
 add_subdirectory(mastering/dynamic-eq)
