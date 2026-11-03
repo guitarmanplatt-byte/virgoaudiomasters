@@ -10,6 +10,11 @@ Extract the downloaded ZIP and launch **Virgo Studios.exe**. This preview is
 not code-signed; Windows may display a reputation warning. Only run downloads
 from the repository/build you trust.
 
+If Windows reports a missing `MSVCP140` or `VCRUNTIME140` DLL, install the latest
+Microsoft Visual C++ v14 **x64** Redistributable from Microsoft's
+[supported downloads page](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist).
+Do not download individual DLLs from third-party websites.
+
 Choose **Audio Setup** to select your Windows audio device and enable inputs.
 JUCE's standard Windows device backends are used; ASIO is not bundled in this
 preview. Use headphones when recording to avoid feedback.
@@ -31,6 +36,53 @@ preview. Use headphones when recording to avoid feedback.
   `.media` directory. Keep that folder alongside the project when moving it.
 - Export a stereo 48 kHz / 24-bit WAV using the same processing as playback.
   Unmastered over-range exports are rejected instead of silently clipping.
+
+## VST3 effects, quantization and rendering (0.2)
+
+Select a track, then **VST3 Effects > Add VST3 effect**. Choose a trusted Windows
+x64 `.vst3` file or bundle, normally in `C:\Program Files\Common Files\VST3`.
+The rack supports eight stereo audio effects per track, native plugin editors
+(or a generic parameter editor), bypass, removal and effect ordering.
+Silver Opto and other compatible VST3 effects can be loaded this way.
+The chain order is **repair → effects → gain/pan → master**.
+Plugin identities and settings are saved in the `.virgo` project. Plugins are
+not copied into the project; install the same plugins when moving computers.
+A missing plugin prevents opening that project rather than silently changing
+its sound. Your currently open project remains intact.
+
+**Quantize** opens tempo (20–300 BPM), grid (quarter through 32nd notes) and
+strength controls. It detects energy rises in the trimmed audio and moves
+transient slices toward a grid anchored at timeline zero. Stereo channels use
+the same markers. It creates a new audio take and mutes the original track;
+source files are never overwritten. This is rhythmic slice quantization, not
+elastic time stretching: gaps can appear and overlapping decays can shorten.
+It works best with clear drum/percussion attacks, not sustained/polyphonic
+material. Zero strength preserves audio exactly. Audition before committing.
+
+**Bounce Track** renders the selected track's repair, VST3 effects, gain and
+pan to a new 48 kHz / 24-bit WAV, adds it to the session, and mutes the original.
+Master processing is excluded to avoid applying it twice. The new track does
+not retain active effects because those effects are already in its audio.
+
+**Batch Export** renders one WAV per track in a new `Virgo Stems` folder.
+All tracks are included, even muted tracks, and solo states are ignored.
+Each file preserves its timeline offset and the files have equal lengths.
+Track processing is included; master processing is excluded. The queue runs
+automatically without a separate export dialog for each file. Files are
+processed in sequence, not simultaneously on multiple CPU threads. A failed
+batch removes its temporary outputs and leaves existing files untouched.
+
+Bounce/quantized takes are kept in `Documents\Virgo Studios Renders` and copied
+to the project's `.media` folder on save. Re-enable the original track and mute
+the rendered take to compare or revert. There is not yet a full undo system.
+
+Plugin latency is compensated across tracks (up to two seconds per rack), and
+offline rendering uses independent plugin instances so it does not advance the
+live rack's internal state. Reported effect tails are included up to ten seconds.
+Only stereo-compatible VST3 **effects** are supported: no VST2, AU, MIDI
+instruments or sidechain routing. Tempo/transport synchronization is not yet
+provided to plugins. Plugins run inside the DAW process, not in a crash-isolated
+sandbox; a faulty or malicious plugin can crash the application. Save first.
 
 ## Audio intelligence
 
@@ -82,7 +134,7 @@ required. If Ollama is unavailable, a clear error is shown and no settings chang
 
 ## Current scope
 
-This preview does **not** include MIDI/piano roll, VST hosting, comping,
+This preview does **not** include MIDI/piano roll, VST instruments, comping,
 automation lanes, time stretching, pitch editing, buses/sends, spectral editing,
 neural denoising, de-reverberation, or a full undo history. Track removal is
 non-destructive to the source file. Save a separate project before major edits.
@@ -97,7 +149,7 @@ Studio Build Tools with the C++ workload and Windows SDK.
 
 ```powershell
 cmake -S desktop/virgo-studios -B desktop/virgo-studios/build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build desktop/virgo-studios/build --target VirgoStudios VirgoStudiosDSPTests --parallel 2
+cmake --build desktop/virgo-studios/build --target VirgoStudios VirgoStudiosDSPTests VirgoStudiosQuantizeTests --parallel 2
 ctest --test-dir desktop/virgo-studios/build --output-on-failure
 ```
 
@@ -105,5 +157,14 @@ The existing **Build VST3 (Windows x64)** GitHub Actions workflow also builds th
 desktop application on Windows and includes `Virgo Studios_Standalone.exe`
 in its native-suite download. The app can also be built independently using
 the commands above. It does not publish or replace the existing web apps.
+
+### Verification
+
+The preview has passed a Windows x64 Release compilation, native window-render
+check and engine integration checks covering import, waveform generation,
+mixing, clip positions, trimming, mute, mastering, WAV round-trip, source-file
+protection and preservation of an existing file after a failed export.
+The Windows build host has no usable sound driver; physical input/output and
+overdub timing are not hardware-verified.
 
 Review JUCE's licensing requirements before commercial distribution.

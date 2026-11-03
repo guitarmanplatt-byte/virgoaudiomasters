@@ -5,7 +5,7 @@
 
 namespace studio
 {
-inline int runEngineTests()
+inline int runEngineTests(const juce::File& pluginFile = {})
 {
     const auto directory = juce::File::getSpecialLocation(juce::File::tempDirectory)
         .getNonexistentChildFile("VirgoStudiosTests", "", false);
@@ -68,6 +68,46 @@ inline int runEngineTests()
         require(protectedFile.loadFileAsString() == "unchanged", "Failed export destroyed existing destination");
         engine.removeTrack(id);
         require(engine.tracks().size() == 1, "Track removal failed");
+        if (pluginFile != juce::File())
+        {
+            auto rack = std::make_shared<PluginChain>();
+            error = rack->add(pluginFile, 48000);
+            require(error.isEmpty(), ("VST3 load failed: " + error).toRawUTF8());
+            require(rack->entries.size() == 1, "Plugin was not inserted");
+            auto& processor = *rack->entries[0].processor;
+            require(processor.getParameters().size() > 0, "Plugin parameters unavailable");
+            // Deliberately change a parameter, then verify saved/restored state.
+            auto* parameter = processor.getParameters()[0];
+            parameter->setValueNotifyingHost(0.73f);
+            const auto saved = rack->save();
+            auto restored = std::make_shared<PluginChain>();
+            require(restored->restore(saved, 48000).isEmpty(), "Plugin restore failed");
+            require(std::abs(restored->entries[0].processor->getParameters()[0]->getValue() - 0.73f) < 0.001f,
+                "Plugin parameter was not preserved");
+            engine.replaceTracks({track}, {});
+            engine.updateTrack(track.id, [&](Track& value) { value.plugins = rack; });
+            auto offline = engine.snapshot(false);
+            require(offline.error.isEmpty() && offline.tracks[0].plugins != rack, "Offline render reused live plugin instance");
+            auto processed = AudioEngine::analyse(offline);
+            require(processed.samples > 0 && std::isfinite(processed.peak), "Hosted plugin produced invalid audio");
+            const auto bounced = directory.getChildFile("bounced.wav");
+            require(AudioEngine::exportWav(engine.snapshot(false), bounced).isEmpty(), "Plugin bounce failed");
+            auto bouncedTrack = AudioEngine::loadTrack(bounced, error);
+            require(bouncedTrack.audio != nullptr && error.isEmpty(), "Bounced audio could not be imported");
+            rack->entries[0].bypass = true;
+            engine.updateTrack(track.id, [](Track&) {});
+            const auto bypassed = AudioEngine::analyse(engine.snapshot(false));
+            require(std::abs(bypassed.rmsDb() - measured.rmsDb()) < 0.02, "Plugin bypass changed audio");
+            auto beforeBatch = engine.snapshot(false);
+            for (int i = 0; i < 3; ++i)
+            {
+                auto stem = engine.snapshot(false);
+                require(AudioEngine::exportWav(stem, directory.getChildFile("stem" + juce::String(i) + ".wav")).isEmpty(),
+                    "Multiple-file render failed");
+            }
+            require(engine.tracks()[0].file == source, "Rendering replaced the original source");
+            std::cout << "PASS: actual VST3 load, state restoration, independent offline instance, plugin bounce, bypass, batch WAV rendering\n";
+        }
         std::cout << "PASS: import, waveform, mixing, offsets, trim, mute, mastering, WAV round-trip, source protection, atomic failed export\n";
         return 0;
     }

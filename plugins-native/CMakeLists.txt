@@ -45,6 +45,9 @@ add_subdirectory(mastering/low-end-focus)
 add_subdirectory(mastering/clarity)
 add_subdirectory(mastering/vintage-tape)
 add_subdirectory(mastering/silver-opto)
+if(TARGET VirgoStudios AND TARGET VASilverOpto_VST3)
+    add_dependencies(VirgoStudios VASilverOpto_VST3)
+endif()
 
 # ── Restoration plugins ───────────────────────────────────────────────────────
 add_subdirectory(restoration/de-clip)

@@ -48,7 +48,7 @@ MainComponent::MainComponent()
 
     for (auto* button : {&importButton, &newButton, &openButton, &saveButton, &exportButton, &setupButton,
                         &playButton, &stopButton, &recordButton, &analyseButton,
-                        &aiButton, &masterButton, &deleteButton})
+                        &aiButton, &masterButton, &deleteButton, &pluginsButton, &quantizeButton, &bounceButton, &batchButton})
         addAndMakeVisible(button);
     for (auto* button : {&muteButton, &soloButton, &repairButton, &highPassButton,
                         &humButton, &gateButton, &clickButton, &masterEnabled})
@@ -108,6 +108,10 @@ MainComponent::MainComponent()
     openButton.onClick = [this] { openProject(); };
     saveButton.onClick = [this] { saveProject(); };
     exportButton.onClick = [this] { exportAudio(); };
+    pluginsButton.onClick = [this] { pluginMenu(); };
+    quantizeButton.onClick = [this] { quantizeAudio(); };
+    bounceButton.onClick = [this] { bounceTrack(); };
+    batchButton.onClick = [this] { batchExport(); };
     setupButton.onClick = [this] { audioSetup(); };
     playButton.onClick = [this]
     {
@@ -179,6 +183,7 @@ MainComponent::~MainComponent()
 {
     stopTimer(); cancelled.store(true);
     worker.removeAllJobs(true, -1);
+    pluginWindows.clear();
     setLookAndFeel(nullptr);
 }
 
@@ -210,7 +215,7 @@ void MainComponent::paint(juce::Graphics& g)
     g.setColour(panel); g.fillRect(0, 0, getWidth(), 128);
     label(g, "VIRGO", {22, 13, 110, 30}, 27, gold, true);
     label(g, "STUDIOS", {134, 17, 110, 25}, 20, text, true);
-    label(g, "WORKSTATION  /  0.1 PREVIEW", {24, 48, 240, 16}, 9, muted);
+    label(g, "WORKSTATION  /  0.2 PREVIEW", {24, 48, 240, 16}, 9, muted);
     const double position = engine.position();
     if (getWidth() > 1280)
         label(g, "48 kHz export  /  24-bit WAV", {590, 88, 220, 18}, 11, muted);
@@ -325,7 +330,11 @@ void MainComponent::resized()
     gateButton.setBounds(390, bottom + 139, 220, 25);
     clickButton.setBounds(390, bottom + 171, 220, 25);
     gateSlider.setBounds(475, bottom + 205, std::max(165, right - 495), 24);
-    deleteButton.setBounds(24, bottom + 245, 150, 24);
+    deleteButton.setBounds(24, bottom + 245, 125, 24);
+    pluginsButton.setBounds(157, bottom + 245, 125, 24);
+    quantizeButton.setBounds(290, bottom + 245, 115, 24);
+    bounceButton.setBounds(413, bottom + 245, 125, 24);
+    batchButton.setBounds(546, bottom + 245, 125, 24);
     analysisScope.setBounds(right + 18, 178, 144, 27);
     analyseButton.setBounds(right + 170, 178, 144, 27);
     masterTarget.setBounds(right + 18, 216, 296, 28);
@@ -340,6 +349,7 @@ void MainComponent::resized()
 
 void MainComponent::timerCallback()
 {
+    if (engine.processingError().isNotEmpty()) showStatus(engine.processingError(), true);
     if (engine.isRecording() && engine.hasRecordingOverrun())
     {
         const auto file = engine.stopRecording();

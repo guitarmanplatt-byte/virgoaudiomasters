@@ -24,6 +24,7 @@ juce::var MainComponent::trackToJson(const Track& track, const juce::File& file)
         {"id", track.id}, {"name", track.name}, {"file", file.getFullPathName()},
         {"offset", track.offset}, {"trimStart", track.trimStart}, {"trimEnd", track.trimEnd},
         {"volumeDb", track.volumeDb}, {"pan", track.pan}, {"mute", track.mute}, {"solo", track.solo},
+        {"plugins", track.savedPlugins},
         {"repair", makeObject({{"enabled", track.repair.enabled}, {"highPass", track.repair.highPass},
             {"hum", track.repair.hum}, {"humHz", track.repair.humHz}, {"gate", track.repair.gate},
             {"gateDb", track.repair.gateDb}, {"deClick", track.repair.deClick}})}
@@ -65,7 +66,13 @@ void MainComponent::saveProject(std::function<void(bool)> completion)
         destination = destination.withFileExtension(".virgo");
         if (safe->busy || safe->engine.isRecording()) { if (completion) completion(false); return; }
         safe->busy = true;
-        auto render = safe->engine.snapshot();
+        auto render = safe->engine.snapshot(true, false);
+        if (render.error.isNotEmpty())
+        {
+            safe->busy = false; safe->showStatus(render.error, true);
+            if (completion) completion(false);
+            return;
+        }
         safe->showStatus("Saving project and preserving source media...");
         safe->worker.addJob([safe, destination, render, completion]
         {
@@ -175,6 +182,7 @@ void MainComponent::openProject()
                     track.repair.gate = static_cast<bool>(repair["gate"]);
                     track.repair.gateDb = number(repair, "gateDb", -55, -80, -25);
                     track.repair.deClick = static_cast<bool>(repair["deClick"]);
+                    track.savedPlugins = item["plugins"];
                     loaded.push_back(std::move(track));
                 }
                 const auto m = data["master"];
@@ -187,6 +195,13 @@ void MainComponent::openProject()
                 {
                     if (!safe) return;
                     safe->busy = false;
+                    if (error.isEmpty())
+                        for (auto& track : loaded)
+                        {
+                            track.plugins = std::make_shared<PluginChain>();
+                            error = track.plugins->restore(track.savedPlugins, 48000);
+                            if (error.isNotEmpty()) break;
+                        }
                     if (error.isEmpty())
                     {
                         safe->engine.replaceTracks(std::move(loaded), master);

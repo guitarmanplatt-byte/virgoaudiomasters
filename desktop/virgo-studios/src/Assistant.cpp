@@ -41,6 +41,7 @@ void MainComponent::analyseAudio()
 {
     if (!canEdit()) return;
     auto render = analysisSnapshot();
+    if (render.error.isNotEmpty()) { showStatus(render.error, true); return; }
     if (render.duration <= 0) { showStatus("Choose audio to analyze first.", true); return; }
     const auto analysisTrack = selectedId;
     const int scope = analysisScope.getSelectedId();

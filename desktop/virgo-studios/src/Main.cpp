@@ -5,14 +5,16 @@ class VirgoStudiosApplication final : public juce::JUCEApplication
 {
 public:
     const juce::String getApplicationName() override { return "Virgo Studios"; }
-    const juce::String getApplicationVersion() override { return "0.1.0"; }
+    const juce::String getApplicationVersion() override { return "0.2.0"; }
     bool moreThanOneInstanceAllowed() override { return false; }
 
     void initialise(const juce::String& commandLine) override
     {
-        if (commandLine.trim() == "--self-test")
+        if (commandLine.trim() == "--self-test" || commandLine.startsWith("--plugin-test="))
         {
-            setApplicationReturnValue(studio::runEngineTests());
+            const auto plugin = commandLine.startsWith("--plugin-test=")
+                ? juce::File(commandLine.fromFirstOccurrenceOf("=", false, false).unquoted()) : juce::File();
+            setApplicationReturnValue(studio::runEngineTests(plugin));
             quit();
             return;
         }

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(VirgoStudios VERSION 0.1.0 LANGUAGES C CXX)
+project(VirgoStudios VERSION 0.2.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(CTest)
@@ -15,13 +15,15 @@ endif()
 juce_add_gui_app(VirgoStudios
     COMPANY_NAME "VirgoAudioMasters"
     PRODUCT_NAME "Virgo Studios"
-    VERSION 0.1.0)
+    VERSION 0.2.0)
 target_sources(VirgoStudios PRIVATE
-    src/Main.cpp src/AudioEngine.cpp src/MainComponent.cpp src/Session.cpp src/Assistant.cpp)
+    src/Main.cpp src/AudioEngine.cpp src/MainComponent.cpp src/Session.cpp src/Assistant.cpp
+    src/PluginChain.cpp src/TrackTools.cpp)
 target_compile_definitions(VirgoStudios PRIVATE
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
+    JUCE_PLUGINHOST_VST3=1
     JUCE_APPLICATION_NAME_STRING="Virgo Studios"
-    JUCE_APPLICATION_VERSION_STRING="0.1.0")
+    JUCE_APPLICATION_VERSION_STRING="0.2.0")
 target_link_libraries(VirgoStudios PRIVATE
     juce::juce_audio_utils juce::juce_dsp
     juce::juce_recommended_config_flags
@@ -39,6 +41,7 @@ if(WIN32)
             COMMAND ${CMAKE_COMMAND}
                 "-DAPP=$<TARGET_FILE:VirgoStudios>"
                 "-DPREVIEW=${CMAKE_CURRENT_BINARY_DIR}/native-preview.png"
+                "-DPLUGIN_BINARY=$<TARGET_FILE:VASilverOpto_VST3>"
                 -P "${CMAKE_CURRENT_SOURCE_DIR}/ci/VerifyNative.cmake")
     endif()
 endif()
@@ -46,4 +49,6 @@ endif()
 if(BUILD_TESTING)
     add_executable(VirgoStudiosDSPTests tests/DSPTests.cpp)
     add_test(NAME VirgoStudiosDSPTests COMMAND VirgoStudiosDSPTests)
+    add_executable(VirgoStudiosQuantizeTests tests/QuantizeTests.cpp)
+    add_test(NAME VirgoStudiosQuantizeTests COMMAND VirgoStudiosQuantizeTests)
 endif()

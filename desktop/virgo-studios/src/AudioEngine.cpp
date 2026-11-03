@@ -8,10 +8,30 @@ void RenderState::prepare(double sampleRate)
     rate = sampleRate;
     duration = 0;
     anySolo = false;
+    nextTime = -1;
+    commonLatency = 0;
+    for (auto& track : tracks)
+    {
+        if (track.plugins)
+        {
+            track.plugins->prepare(rate);
+            commonLatency = std::max(commonLatency, track.plugins->latency());
+        }
+    }
     for (auto& track : tracks)
     {
         track.dsp.prepare(rate, track.repair);
-        duration = std::max(duration, track.offset + track.duration());
+        track.delay.assign(static_cast<size_t>(commonLatency - (track.plugins ? track.plugins->latency() : 0)), {0, 0});
+        track.delayPosition = 0;
+        double tail = 0;
+        if (track.plugins)
+            for (const auto& entry : track.plugins->entries)
+                if (!entry.bypass)
+                {
+                    const double seconds = entry.processor->getTailLengthSeconds();
+                    if (std::isfinite(seconds)) tail += std::clamp(seconds, 0.0, 10.0);
+                }
+        duration = std::max(duration, track.offset + track.duration() + std::min(10.0, tail));
         anySolo = anySolo || track.solo;
     }
     masterDSP.prepare(rate, master);
@@ -19,11 +39,38 @@ void RenderState::prepare(double sampleRate)
 
 void RenderState::frame(double time, float& left, float& right)
 {
-    left = right = 0;
+    juce::AudioBuffer<float> value(2, 1);
+    block(time, value);
+    left = value.getSample(0, 0); right = value.getSample(1, 0);
+}
+
+void RenderState::block(double time, juce::AudioBuffer<float>& output)
+{
+    // Feed ahead by the common latency; all tracks emerge on the same grid.
+    if (nextTime < 0 || std::abs(nextTime - time) > 0.5 / rate)
+    {
+        for (int done = 0; done < commonLatency; done += 128)
+        {
+            juce::AudioBuffer<float> discarded(2, std::min(128, commonLatency - done));
+            processRaw(time + done / rate, discarded);
+        }
+    }
+    processRaw(time + commonLatency / rate, output);
+    nextTime = time + output.getNumSamples() / rate;
+}
+
+void RenderState::processRaw(double time, juce::AudioBuffer<float>& output)
+{
+    output.clear();
+    const int count = output.getNumSamples();
+    juce::AudioBuffer<float> input(2, count);
     for (auto& track : tracks)
     {
         if (track.mute || (anySolo && !track.solo) || !track.audio) continue;
-        const double local = time - track.offset;
+        input.clear();
+        for (int i = 0; i < count; ++i)
+        {
+        const double local = time + i / rate - track.offset;
         if (local < 0 || local >= track.duration()) continue;
         const double sample = (local + track.trimStart) * track.sourceRate;
         const int index = static_cast<int>(sample);
@@ -37,12 +84,33 @@ void RenderState::frame(double time, float& left, float& right)
         };
         float l = read(0), r = read(1);
         track.dsp.process(l, r);
+        input.setSample(0, i, l); input.setSample(1, i, r);
+        }
+        if (track.plugins && !track.plugins->process(input, time))
+        {
+            error = "A plugin produced invalid audio on " + track.name + ". Bypass or remove the effect.";
+            output.clear();
+            return;
+        }
         const float level = gain(track.volumeDb);
-        // Stereo balance: preserves unity at centre, attenuates the opposite side.
-        left += l * level * std::min(1.0f, 1.0f - track.pan);
-        right += r * level * std::min(1.0f, 1.0f + track.pan);
+        for (int i = 0; i < count; ++i)
+        {
+            float l = input.getSample(0, i), r = input.getSample(1, i);
+            if (!track.delay.empty())
+            {
+                auto& delayed = track.delay[static_cast<size_t>(track.delayPosition)];
+                const auto previous = delayed; delayed = {l, r}; l = previous[0]; r = previous[1];
+                track.delayPosition = (track.delayPosition + 1) % static_cast<int>(track.delay.size());
+            }
+            output.addSample(0, i, l * level * std::min(1.0f, 1.0f - track.pan));
+            output.addSample(1, i, r * level * std::min(1.0f, 1.0f + track.pan));
+        }
     }
-    masterDSP.process(left, right);
+    for (int i = 0; i < count; ++i)
+    {
+        float l = output.getSample(0, i), r = output.getSample(1, i);
+        masterDSP.process(l, r); output.setSample(0, i, l); output.setSample(1, i, r);
+    }
 }
 
 AudioEngine::AudioEngine() { recordThread.startThread(); }
@@ -164,15 +232,37 @@ MasterSettings AudioEngine::masterSettings() const
     const juce::ScopedLock lock(mutex); return state.master;
 }
 
-RenderState AudioEngine::snapshot(bool includeMaster) const
+RenderState AudioEngine::snapshot(bool includeMaster, bool clonePlugins) const
 {
     const juce::ScopedLock lock(mutex);
     auto result = state;
+    try
+    {
+        for (auto& track : result.tracks)
+            if (track.plugins)
+            {
+                track.savedPlugins = track.plugins->save();
+                track.plugins = clonePlugins ? track.plugins->clone(48000) : nullptr;
+            }
+    }
+    catch (const std::exception& exception)
+    {
+        result.error = "Could not snapshot plugin rack: " + juce::String(exception.what());
+        result.tracks.clear();
+    }
     if (!includeMaster) result.master.enabled = false;
     result.prepare(48000); return result;
 }
 
-void AudioEngine::play() { playing.store(true); }
+void AudioEngine::play()
+{
+    const juce::ScopedLock lock(mutex);
+    state.error.clear(); state.prepare(state.rate); playing.store(true);
+}
+juce::String AudioEngine::processingError() const
+{
+    const juce::ScopedLock lock(mutex); return state.error;
+}
 void AudioEngine::pause() { playing.store(false); }
 void AudioEngine::stop() { playing.store(false); seek(0); }
 void AudioEngine::seek(double seconds)
@@ -241,15 +331,21 @@ void AudioEngine::audioDeviceIOCallbackWithContext(const float* const* inputs, i
     if (!playing.load()) { outputPeak.store(0); return; }
     double time = playhead.load();
     float peak = 0;
-    for (int i = 0; i < count; ++i)
+    for (int start = 0; start < count; start += 128)
     {
-        float left = 0, right = 0;
-        state.frame(time, left, right);
+        const int size = std::min(128, count - start);
+        juce::AudioBuffer<float> buffer(2, size);
+        state.block(time, buffer);
+        if (state.error.isNotEmpty()) { playing.store(false); outputPeak.store(0); return; }
+        for (int i = 0; i < size; ++i)
+        {
+        const float left = buffer.getSample(0, i), right = buffer.getSample(1, i);
         peak = std::max({peak, std::abs(left), std::abs(right)});
         // Device safety only. Export checks unmastered clipping separately.
-        if (numOutputs > 0 && outputs[0]) outputs[0][i] = std::clamp(left, -1.0f, 1.0f);
-        if (numOutputs > 1 && outputs[1]) outputs[1][i] = std::clamp(right, -1.0f, 1.0f);
+        if (numOutputs > 0 && outputs[0]) outputs[0][start + i] = std::clamp(left, -1.0f, 1.0f);
+        if (numOutputs > 1 && outputs[1]) outputs[1][start + i] = std::clamp(right, -1.0f, 1.0f);
         time += 1.0 / state.rate;
+        }
     }
     playhead.store(time); outputPeak.store(peak);
     if (!recording.load() && time >= state.duration) playing.store(false);
@@ -257,13 +353,17 @@ void AudioEngine::audioDeviceIOCallbackWithContext(const float* const* inputs, i
 
 Measurements AudioEngine::analyse(RenderState render, std::atomic<bool>* cancelled)
 {
+    if (render.error.isNotEmpty()) return {};
     Measurements l, r;
     const auto samples = static_cast<std::int64_t>(std::ceil(render.duration * render.rate));
-    for (std::int64_t i = 0; i < samples; ++i)
+    for (std::int64_t start = 0; start < samples; start += 128)
     {
-        if (cancelled && (i % 4096 == 0) && cancelled->load()) return {};
-        float left = 0, right = 0; render.frame(i / render.rate, left, right);
-        l.push(left); r.push(right);
+        if (cancelled && cancelled->load()) return {};
+        juce::AudioBuffer<float> block(2, static_cast<int>(std::min<std::int64_t>(128, samples - start)));
+        render.block(start / render.rate, block);
+        if (render.error.isNotEmpty()) return {};
+        for (int i = 0; i < block.getNumSamples(); ++i)
+        { l.push(block.getSample(0, i)); r.push(block.getSample(1, i)); }
     }
     l.samples += r.samples; l.sum += r.sum; l.squares += r.squares;
     l.peak = std::max(l.peak, r.peak); l.clipped += r.clipped; l.clicks += r.clicks;
@@ -272,6 +372,7 @@ Measurements AudioEngine::analyse(RenderState render, std::atomic<bool>* cancell
 
 juce::String AudioEngine::exportWav(RenderState render, const juce::File& file, std::atomic<bool>* cancelled)
 {
+    if (render.error.isNotEmpty()) return render.error;
     for (const auto& track : render.tracks)
         if (track.file == file) return "Export cannot overwrite source audio.";
     if (render.duration <= 0) return "The project has no audio to export.";
@@ -282,15 +383,17 @@ juce::String AudioEngine::exportWav(RenderState render, const juce::File& file, 
     std::unique_ptr<juce::AudioFormatWriter> writer(wav.createWriterFor(output.get(), render.rate, 2, 24, {}, 0));
     if (!writer) return "Could not create WAV writer.";
     output.release();
-    juce::AudioBuffer<float> block(2, 1024);
     const auto total = static_cast<std::int64_t>(std::ceil(render.duration * render.rate));
-    for (std::int64_t position = 0; position < total; position += 1024)
+    for (std::int64_t position = 0; position < total; position += 128)
     {
         if (cancelled && cancelled->load()) return "Export cancelled; destination was not changed.";
-        const int count = static_cast<int>(std::min<std::int64_t>(1024, total - position));
+        const int count = static_cast<int>(std::min<std::int64_t>(128, total - position));
+        juce::AudioBuffer<float> block(2, count);
+        render.block(position / render.rate, block);
+        if (render.error.isNotEmpty()) return render.error;
         for (int i = 0; i < count; ++i)
         {
-            float left = 0, right = 0; render.frame((position + i) / render.rate, left, right);
+            const float left = block.getSample(0, i), right = block.getSample(1, i);
             if (!std::isfinite(left) || !std::isfinite(right)) return "Invalid audio detected; export aborted.";
             if (std::abs(left) > 1 || std::abs(right) > 1)
                 return "The mix clips. Lower track levels or enable mastering before exporting.";

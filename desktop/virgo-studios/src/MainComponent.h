@@ -30,6 +30,12 @@ private:
     void newProject();
     void openProject();
     void exportAudio();
+    void pluginMenu();
+    void addPlugin();
+    void quantizeAudio();
+    void bounceTrack();
+    void batchExport();
+    void finishTake(const juce::File&, const juce::String& originalId, double offset, bool copySettings);
     void analyseAudio();
     void askAI();
     void selectTrack(juce::String);
@@ -55,6 +61,7 @@ private:
     juce::String selectedId;
     juce::File projectFile;
     bool dirty = false, busy = false, updatingControls = false;
+    std::vector<std::unique_ptr<juce::DocumentWindow>> pluginWindows;
     int scrollRow = 0;
     double dragOffset = 0, dragMouseX = 0;
     Measurements measurements;
@@ -64,7 +71,9 @@ private:
     juce::TextButton importButton {"Import Audio"}, newButton {"New"}, openButton {"Open"}, saveButton {"Save"},
         exportButton {"Export WAV"}, setupButton {"Audio Setup"}, playButton {"Play"},
         stopButton {"Stop"}, recordButton {"Record"}, analyseButton {"Analyze Audio"},
-        aiButton {"AI Plan + Apply"}, masterButton {"Apply Mastering"}, deleteButton {"Remove Track"};
+        aiButton {"AI Plan + Apply"}, masterButton {"Apply Mastering"}, deleteButton {"Remove Track"},
+        pluginsButton {"VST3 Effects"}, quantizeButton {"Quantize"}, bounceButton {"Bounce Track"},
+        batchButton {"Batch Export"};
     juce::ToggleButton muteButton {"Mute"}, soloButton {"Solo"},
         repairButton {"Repair enabled"}, highPassButton {"DC / rumble filter"},
         humButton {"Hum removal"}, gateButton {"Noise gate"}, clickButton {"Click suppression"},

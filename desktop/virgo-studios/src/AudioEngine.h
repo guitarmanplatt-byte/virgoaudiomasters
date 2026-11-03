@@ -1,6 +1,7 @@
 #pragma once
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "AudioDSP.h"
+#include "PluginChain.h"
 #include <atomic>
 #include <memory>
 #include <vector>
@@ -18,6 +19,10 @@ struct Track
     bool mute = false, solo = false;
     RepairSettings repair;
     RepairDSP dsp;
+    std::shared_ptr<PluginChain> plugins;
+    juce::var savedPlugins;
+    std::vector<std::array<float, 2>> delay;
+    int delayPosition = 0;
     double duration() const { return std::max(0.0, trimEnd - trimStart); }
 };
 
@@ -28,8 +33,13 @@ struct RenderState
     MasterDSP masterDSP;
     double rate = 48000, duration = 0;
     bool anySolo = false;
+    juce::String error;
+    int commonLatency = 0;
+    double nextTime = -1;
     void prepare(double sampleRate);
     void frame(double time, float& left, float& right);
+    void block(double time, juce::AudioBuffer<float>&);
+    void processRaw(double time, juce::AudioBuffer<float>&);
 };
 
 class AudioEngine final : private juce::AudioIODeviceCallback
@@ -46,7 +56,7 @@ public:
     void replaceTracks(std::vector<Track>, MasterSettings);
     void setMaster(MasterSettings);
     MasterSettings masterSettings() const;
-    RenderState snapshot(bool includeMaster = true) const;
+    RenderState snapshot(bool includeMaster = true, bool clonePlugins = true) const;
     void play();
     void pause();
     void stop();
@@ -55,6 +65,7 @@ public:
     double position() const { return playhead.load(); }
     double duration() const;
     float peakLevel() const { return outputPeak.load(); }
+    juce::String processingError() const;
     bool isRecording() const { return recording.load(); }
     bool hasRecordingOverrun() const { return recordingOverrun.load(); }
     juce::String startRecording(const juce::File&);
