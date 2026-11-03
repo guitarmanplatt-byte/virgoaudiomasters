@@ -14,8 +14,13 @@ public:
         {
             const auto plugin = commandLine.startsWith("--plugin-test=")
                 ? juce::File(commandLine.fromFirstOccurrenceOf("=", false, false).unquoted()) : juce::File();
-            setApplicationReturnValue(studio::runEngineTests(plugin));
-            quit();
+            // VST3 creation/state calls can depend on the native message loop.
+            // Run after initialise returns, just like normal user-driven loading.
+            juce::MessageManager::callAsync([this, plugin]
+            {
+                setApplicationReturnValue(studio::runEngineTests(plugin));
+                quit();
+            });
             return;
         }
         window = std::make_unique<Window>();

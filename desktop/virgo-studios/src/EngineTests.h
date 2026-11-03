@@ -8,6 +8,8 @@ namespace studio
 {
 inline int runEngineTests(const juce::File& pluginFile = {})
 {
+    std::cout.setf(std::ios::unitbuf);
+    std::cerr.setf(std::ios::unitbuf);
     const auto directory = juce::File::getSpecialLocation(juce::File::tempDirectory)
         .getNonexistentChildFile("VirgoStudiosTests", "", false);
     directory.createDirectory();
@@ -94,8 +96,10 @@ inline int runEngineTests(const juce::File& pluginFile = {})
         }
         if (pluginFile != juce::File())
         {
+            std::cout << "VST3 TEST: loading " << pluginFile.getFullPathName() << '\n';
             auto rack = std::make_shared<PluginChain>();
             error = rack->add(pluginFile, 48000);
+            std::cout << "VST3 TEST: load returned " << error << '\n';
             require(error.isEmpty(), ("VST3 load failed: " + error).toRawUTF8());
             require(rack->entries.size() == 1, "Plugin was not inserted");
             auto& processor = *rack->entries[0].processor;
@@ -103,19 +107,25 @@ inline int runEngineTests(const juce::File& pluginFile = {})
             // Deliberately change a parameter, then verify saved/restored state.
             auto* parameter = processor.getParameters()[0];
             parameter->setValueNotifyingHost(0.73f);
+            std::cout << "VST3 TEST: saving plugin state\n";
             const auto saved = rack->save();
+            std::cout << "VST3 TEST: restoring plugin state\n";
             auto restored = std::make_shared<PluginChain>();
             require(restored->restore(saved, 48000).isEmpty(), "Plugin restore failed");
             require(std::abs(restored->entries[0].processor->getParameters()[0]->getValue() - 0.73f) < 0.001f,
                 "Plugin parameter was not preserved");
             engine.replaceTracks({track}, {});
+            std::cout << "VST3 TEST: preparing live rack\n";
             engine.updateTrack(track.id, [&](Track& value) { value.plugins = rack; });
+            std::cout << "VST3 TEST: cloning offline rack\n";
             auto offline = engine.snapshot(false);
             require(offline.error.isEmpty() && offline.tracks[0].plugins != rack, "Offline render reused live plugin instance");
             auto processed = AudioEngine::analyse(offline);
+            std::cout << "VST3 TEST: analysis completed\n";
             require(processed.samples > 0 && std::isfinite(processed.peak), "Hosted plugin produced invalid audio");
             const auto bounced = directory.getChildFile("bounced.wav");
             require(AudioEngine::exportWav(engine.snapshot(false), bounced).isEmpty(), "Plugin bounce failed");
+            std::cout << "VST3 TEST: bounce completed\n";
             auto bouncedTrack = AudioEngine::loadTrack(bounced, error);
             require(bouncedTrack.audio != nullptr && error.isEmpty(), "Bounced audio could not be imported");
             rack->entries[0].bypass = true;
