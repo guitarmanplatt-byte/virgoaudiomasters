@@ -4,9 +4,11 @@
 namespace studio
 {
 // A render snapshot owns independent plugin instances, never the live rack.
-class PluginChain
+class PluginChain : private juce::AudioProcessorListener
 {
 public:
+    ~PluginChain() override;
+    std::atomic<bool> changed {false};
     struct Entry
     {
         juce::PluginDescription description;
@@ -25,5 +27,7 @@ private:
     double currentRate = 0;
     static juce::AudioPluginFormatManager& formats();
     juce::String instantiate(const juce::PluginDescription&, const juce::MemoryBlock&, bool, double);
+    void audioProcessorParameterChanged(juce::AudioProcessor*, int, float) override { changed.store(true); }
+    void audioProcessorChanged(juce::AudioProcessor*, const juce::AudioProcessorListener::ChangeDetails&) override { changed.store(true); }
 };
 }

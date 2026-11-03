@@ -51,7 +51,9 @@ void RenderState::block(double time, juce::AudioBuffer<float>& output)
     {
         for (int done = 0; done < commonLatency; done += 128)
         {
-            juce::AudioBuffer<float> discarded(2, std::min(128, commonLatency - done));
+            float storage[2][128] {};
+            float* channels[] {storage[0], storage[1]};
+            juce::AudioBuffer<float> discarded(channels, 2, std::min(128, commonLatency - done));
             processRaw(time + done / rate, discarded);
         }
     }
@@ -63,7 +65,10 @@ void RenderState::processRaw(double time, juce::AudioBuffer<float>& output)
 {
     output.clear();
     const int count = output.getNumSamples();
-    juce::AudioBuffer<float> input(2, count);
+    jassert(count <= 128);
+    float storage[2][128] {};
+    float* channels[] {storage[0], storage[1]};
+    juce::AudioBuffer<float> input(channels, 2, count);
     for (auto& track : tracks)
     {
         if (track.mute || (anySolo && !track.solo) || !track.audio) continue;
@@ -334,7 +339,9 @@ void AudioEngine::audioDeviceIOCallbackWithContext(const float* const* inputs, i
     for (int start = 0; start < count; start += 128)
     {
         const int size = std::min(128, count - start);
-        juce::AudioBuffer<float> buffer(2, size);
+        float storage[2][128] {};
+        float* channels[] {storage[0], storage[1]};
+        juce::AudioBuffer<float> buffer(channels, 2, size);
         state.block(time, buffer);
         if (state.error.isNotEmpty()) { playing.store(false); outputPeak.store(0); return; }
         for (int i = 0; i < size; ++i)

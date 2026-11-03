@@ -349,6 +349,9 @@ void MainComponent::resized()
 
 void MainComponent::timerCallback()
 {
+    for (const auto& track : engine.tracks())
+        if (track.plugins && track.plugins->changed.exchange(false))
+        { dirty = true; hasMeasurements = false; }
     if (engine.processingError().isNotEmpty()) showStatus(engine.processingError(), true);
     if (engine.isRecording() && engine.hasRecordingOverrun())
     {

@@ -3,6 +3,10 @@
 
 namespace studio
 {
+PluginChain::~PluginChain()
+{
+    for (auto& entry : entries) entry.processor->removeListener(this);
+}
 juce::AudioPluginFormatManager& PluginChain::formats()
 {
     static juce::AudioPluginFormatManager manager;
@@ -32,6 +36,7 @@ juce::String PluginChain::instantiate(const juce::PluginDescription& description
     if (processor->getLatencySamples() > static_cast<int>(rate * 2)
         || latency() + processor->getLatencySamples() > static_cast<int>(rate * 2))
         return "This preview supports up to two seconds of total plugin latency per track.";
+    processor->addListener(this);
     entries.push_back({description, std::move(processor), bypass});
     currentRate = rate;
     return {};
