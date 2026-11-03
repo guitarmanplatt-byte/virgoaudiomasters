@@ -27,6 +27,7 @@ private:
     void importFiles(juce::Array<juce::File>, double offset = 0);
     void record();
     void saveProject(std::function<void(bool)> completion = {});
+    void newProject();
     void openProject();
     void exportAudio();
     void analyseAudio();

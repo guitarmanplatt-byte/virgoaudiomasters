@@ -36,6 +36,19 @@ juce::var MainComponent::masterToJson(MasterSettings master)
         {"thresholdDb", master.thresholdDb}, {"ceilingDb", master.ceilingDb}, {"warmth", master.warmth}});
 }
 
+void MainComponent::newProject()
+{
+    if (!canEdit()) return;
+    confirmDiscard([safe = juce::Component::SafePointer<MainComponent>(this)]
+    {
+        if (!safe) return;
+        safe->engine.replaceTracks({}, {});
+        safe->selectedId.clear(); safe->projectFile = {}; safe->dirty = false;
+        safe->hasMeasurements = false; safe->scrollRow = 0; safe->refreshControls();
+        safe->showStatus("New project. Import or record audio to begin.");
+    });
+}
+
 void MainComponent::saveProject(std::function<void(bool)> completion)
 {
     if (!canEdit()) { if (completion) completion(false); return; }

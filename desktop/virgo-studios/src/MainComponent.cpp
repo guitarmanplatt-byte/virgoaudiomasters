@@ -104,18 +104,7 @@ MainComponent::MainComponent()
     masterTarget.addItem("Loud  /  -14 dB RMS", 3); masterTarget.setSelectedId(2);
 
     importButton.onClick = [this] { importAudio(); };
-    newButton.onClick = [this]
-    {
-        if (!canEdit()) return;
-        confirmDiscard([safe = juce::Component::SafePointer<MainComponent>(this)]
-        {
-            if (!safe) return;
-            safe->engine.replaceTracks({}, {});
-            safe->selectedId.clear(); safe->projectFile = {}; safe->dirty = false;
-            safe->hasMeasurements = false; safe->scrollRow = 0; safe->refreshControls();
-            safe->showStatus("New project. Import or record audio to begin.");
-        });
-    };
+    newButton.onClick = [this] { newProject(); };
     openButton.onClick = [this] { openProject(); };
     saveButton.onClick = [this] { saveProject(); };
     exportButton.onClick = [this] { exportAudio(); };
