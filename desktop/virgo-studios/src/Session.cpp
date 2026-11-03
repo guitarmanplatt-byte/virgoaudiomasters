@@ -44,7 +44,7 @@ void MainComponent::newProject()
     {
         if (!safe) return;
         safe->engine.replaceTracks({}, {});
-        safe->selectedId.clear(); safe->projectFile = {}; safe->dirty = false;
+        safe->selectedId.clear(); safe->projectFile = juce::File(); safe->dirty = false;
         safe->hasMeasurements = false; safe->scrollRow = 0; safe->refreshControls();
         safe->showStatus("New project. Import or record audio to begin.");
     });
@@ -65,6 +65,7 @@ void MainComponent::saveProject(std::function<void(bool)> completion)
         if (destination == juce::File()) { if (completion) completion(false); return; }
         destination = destination.withFileExtension(".virgo");
         if (safe->busy || safe->engine.isRecording()) { if (completion) completion(false); return; }
+        safe->pluginWindows.clear();
         safe->busy = true;
         auto render = safe->engine.snapshot(true, false);
         if (render.error.isNotEmpty())
@@ -94,7 +95,7 @@ void MainComponent::saveProject(std::function<void(bool)> completion)
             }
             if (error.isEmpty())
             {
-                const auto json = makeObject({{"format", "Virgo Studios"}, {"version", 1},
+                const auto json = makeObject({{"format", "Virgo Studios"}, {"version", 2},
                     {"tracks", serializedTracks}, {"master", masterToJson(render.master)}});
                 juce::TemporaryFile temporary(destination);
                 if (!temporary.getFile().replaceWithText(juce::JSON::toString(json, false))
@@ -115,6 +116,8 @@ void MainComponent::saveProject(std::function<void(bool)> completion)
 
 void MainComponent::confirmDiscard(std::function<void()> continuation)
 {
+    for (const auto& track : engine.tracks())
+        if (track.plugins && track.plugins->changed.exchange(false)) dirty = true;
     if (!dirty) { continuation(); return; }
     juce::AlertWindow::showYesNoCancelBox(juce::AlertWindow::QuestionIcon, "Unsaved Virgo Studios project",
         "Save your changes before continuing?", "Save", "Discard", "Cancel", this,
@@ -154,7 +157,8 @@ void MainComponent::openProject()
                 std::vector<Track> loaded;
                 MasterSettings master;
                 const auto* list = data["tracks"].getArray();
-                if (data["format"].toString() != "Virgo Studios" || static_cast<int>(data["version"]) != 1
+                const int version = static_cast<int>(data["version"]);
+                if (data["format"].toString() != "Virgo Studios" || version < 1 || version > 2
                     || !list || list->size() > 32)
                     error = "This is not a supported Virgo Studios project.";
                 std::uint64_t bytes = 0;

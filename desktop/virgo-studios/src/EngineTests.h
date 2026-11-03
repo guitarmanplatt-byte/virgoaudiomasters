@@ -1,5 +1,6 @@
 #pragma once
 #include "AudioEngine.h"
+#include "TestEffect.h"
 #include <iostream>
 #include <stdexcept>
 
@@ -68,6 +69,29 @@ inline int runEngineTests(const juce::File& pluginFile = {})
         require(protectedFile.loadFileAsString() == "unchanged", "Failed export destroyed existing destination");
         engine.removeTrack(id);
         require(engine.tracks().size() == 1, "Track removal failed");
+        {
+            auto impulse = track;
+            impulse.audio = std::make_shared<juce::AudioBuffer<float>>(2, 4800);
+            impulse.audio->clear();
+            impulse.audio->setSample(0, 0, 0.2f); impulse.audio->setSample(1, 0, -0.2f);
+            auto delayed = impulse;
+            delayed.plugins = std::make_shared<PluginChain>();
+            delayed.plugins->entries.push_back({{}, std::make_unique<TestDelayEffect>(), false});
+            RenderState aligned; aligned.tracks = {impulse, delayed}; aligned.prepare(48000);
+            juce::AudioBuffer<float> block(2, 128);
+            aligned.block(0, block);
+            require(std::abs(block.getSample(0, 0) - 0.4f) < 1e-6f, "Plugin latency misaligned the first attack");
+            require(std::abs(block.getSample(1, 0) + 0.4f) < 1e-6f, "Stereo latency compensation failed");
+            for (int i = 1; i < 128; ++i) require(block.getSample(0, i) == 0, "Delayed duplicate attack");
+            aligned.block(128.0 / 48000, block);
+            require(block.getMagnitude(0, 128) == 0, "Latency state did not continue across blocks");
+            delayed.plugins = std::make_shared<PluginChain>();
+            delayed.plugins->entries.push_back({{}, std::make_unique<TestDelayEffect>(true), false});
+            RenderState invalid; invalid.tracks = {delayed}; invalid.prepare(48000);
+            require(AudioEngine::exportWav(invalid, protectedFile).isNotEmpty(), "Invalid plugin audio was exported");
+            require(protectedFile.loadFileAsString() == "unchanged", "Invalid plugin export destroyed destination");
+            std::cout << "PASS: stereo plugin latency compensation, block continuity, invalid plugin audio protection\n";
+        }
         if (pluginFile != juce::File())
         {
             auto rack = std::make_shared<PluginChain>();
@@ -98,7 +122,6 @@ inline int runEngineTests(const juce::File& pluginFile = {})
             engine.updateTrack(track.id, [](Track&) {});
             const auto bypassed = AudioEngine::analyse(engine.snapshot(false));
             require(std::abs(bypassed.rmsDb() - measured.rmsDb()) < 0.02, "Plugin bypass changed audio");
-            auto beforeBatch = engine.snapshot(false);
             for (int i = 0; i < 3; ++i)
             {
                 auto stem = engine.snapshot(false);

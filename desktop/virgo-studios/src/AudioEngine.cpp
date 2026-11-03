@@ -208,6 +208,7 @@ void AudioEngine::updateTrack(const juce::String& id, const std::function<void(T
 {
     const juce::ScopedLock lock(mutex);
     for (auto& track : state.tracks) if (track.id == id) update(track);
+    state.error.clear();
     state.prepare(state.rate);
 }
 

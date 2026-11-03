@@ -36,14 +36,6 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "$<TARGET_FILE:VirgoStudios>"
             "$<TARGET_FILE_DIR:VirgoStudios>/Virgo Studios_Standalone.exe")
-    if(DEFINED ENV{GITHUB_ACTIONS})
-        add_custom_command(TARGET VirgoStudios POST_BUILD
-            COMMAND ${CMAKE_COMMAND}
-                "-DAPP=$<TARGET_FILE:VirgoStudios>"
-                "-DPREVIEW=${CMAKE_CURRENT_BINARY_DIR}/native-preview.png"
-                "-DPLUGIN_BINARY=$<TARGET_FILE:VASilverOpto_VST3>"
-                -P "${CMAKE_CURRENT_SOURCE_DIR}/ci/VerifyNative.cmake")
-    endif()
 endif()
 
 if(BUILD_TESTING)
@@ -51,4 +43,23 @@ if(BUILD_TESTING)
     add_test(NAME VirgoStudiosDSPTests COMMAND VirgoStudiosDSPTests)
     add_executable(VirgoStudiosQuantizeTests tests/QuantizeTests.cpp)
     add_test(NAME VirgoStudiosQuantizeTests COMMAND VirgoStudiosQuantizeTests)
+endif()
+
+if(WIN32 AND DEFINED ENV{GITHUB_ACTIONS})
+    set(verificationArgs "")
+    if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+        list(APPEND verificationArgs "-DPLUGIN_BINARY=$<TARGET_FILE:VASilverOpto_VST3>")
+    endif()
+    if(BUILD_TESTING)
+        add_dependencies(VirgoStudios VirgoStudiosDSPTests VirgoStudiosQuantizeTests)
+        list(APPEND verificationArgs
+            "-DDSP_TEST=$<TARGET_FILE:VirgoStudiosDSPTests>"
+            "-DQUANTIZE_TEST=$<TARGET_FILE:VirgoStudiosQuantizeTests>")
+    endif()
+    add_custom_command(TARGET VirgoStudios POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+            "-DAPP=$<TARGET_FILE:VirgoStudios>"
+            "-DPREVIEW=${CMAKE_CURRENT_BINARY_DIR}/native-preview.png"
+            ${verificationArgs}
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/ci/VerifyNative.cmake")
 endif()
