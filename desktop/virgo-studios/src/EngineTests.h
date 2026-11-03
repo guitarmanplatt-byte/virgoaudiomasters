@@ -1,6 +1,7 @@
 #pragma once
 #include "AudioEngine.h"
 #include "TestEffect.h"
+#include "StartupArguments.h"
 #include <iostream>
 #include <stdexcept>
 
@@ -20,6 +21,11 @@ inline int runEngineTests(const juce::File& pluginFile = {})
         {
             if (!condition) throw std::runtime_error(message);
         };
+        require(startupArgument("\"--plugin-test=C:\\My Plugins\\Silver Opto.vst3\"")
+            == "--plugin-test=C:\\My Plugins\\Silver Opto.vst3", "Quoted Windows startup argument was not parsed");
+        require(startupArgument("--plugin-test=\"C:\\My Plugins\\Silver Opto.vst3\"")
+            .fromFirstOccurrenceOf("=", false, false).unquoted() == "C:\\My Plugins\\Silver Opto.vst3",
+            "Quoted plugin path was not parsed");
         const auto source = directory.getChildFile("source.wav");
         juce::AudioBuffer<float> sourceAudio(2, 4800);
         for (int i = 0; i < sourceAudio.getNumSamples(); ++i)

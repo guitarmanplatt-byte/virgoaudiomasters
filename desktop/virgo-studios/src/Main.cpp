@@ -1,5 +1,6 @@
 #include "MainComponent.h"
 #include "EngineTests.h"
+#include "StartupArguments.h"
 
 class VirgoStudiosApplication final : public juce::JUCEApplication
 {
@@ -10,10 +11,11 @@ public:
 
     void initialise(const juce::String& commandLine) override
     {
-        if (commandLine.trim() == "--self-test" || commandLine.startsWith("--plugin-test="))
+        const auto argument = studio::startupArgument(commandLine);
+        if (argument == "--self-test" || argument.startsWith("--plugin-test="))
         {
-            const auto plugin = commandLine.startsWith("--plugin-test=")
-                ? juce::File(commandLine.fromFirstOccurrenceOf("=", false, false).unquoted()) : juce::File();
+            const auto plugin = argument.startsWith("--plugin-test=")
+                ? juce::File(argument.fromFirstOccurrenceOf("=", false, false).unquoted()) : juce::File();
             // VST3 creation/state calls can depend on the native message loop.
             // Run after initialise returns, just like normal user-driven loading.
             juce::MessageManager::callAsync([this, plugin]
@@ -25,9 +27,9 @@ public:
         }
         window = std::make_unique<Window>();
         // CI can capture the real native interface without simulating audio hardware.
-        if (commandLine.startsWith("--screenshot="))
+        if (argument.startsWith("--screenshot="))
         {
-            const auto file = juce::File(commandLine.fromFirstOccurrenceOf("=", false, false).unquoted());
+            const auto file = juce::File(argument.fromFirstOccurrenceOf("=", false, false).unquoted());
             juce::Timer::callAfterDelay(1500, [this, file]
             {
                 auto image = window->content->capture();
