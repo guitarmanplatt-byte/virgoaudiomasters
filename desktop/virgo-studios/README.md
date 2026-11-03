@@ -39,8 +39,20 @@ preview. Use headphones when recording to avoid feedback.
 
 ## VST3 effects, quantization and rendering (0.2)
 
-Select a track, then **VST3 Effects > Add VST3 effect**. Choose a trusted Windows
+Select a track, then **VST3 Effects > Browse / scan installed VST3 effects**.
+Choose **Scan plugin folders**, confirm the standard Windows VST3 folders,
+and use **+** to include any custom plugin folders. The scan searches those
+folders recursively and displays discovered plugins by name and manufacturer.
+Select an effect and click **Load selected effect** to add it to the currently
+selected track. The list and search folders are saved between app launches.
+Use the list's column headers to sort, or **Scan / manage plugins** to rescan,
+remove stale entries or manage failed plugins. Cancel is available while scanning.
+The browser lists VST3 plugins; instruments cannot be loaded by this preview.
+You can still use **Choose VST3 file manually** to select a trusted Windows
 x64 `.vst3` file or bundle, normally in `C:\Program Files\Common Files\VST3`.
+Scanning loads plugin code in the DAW process. Save first and scan only trusted
+folders: a broken plugin can hang or crash the app. A crash-marker file helps
+skip plugins involved in an interrupted scan on the next scan.
 The rack supports eight stereo audio effects per track, native plugin editors
 (or a generic parameter editor), bypass, removal and effect ordering.
 Silver Opto and other compatible VST3 effects can be loaded this way.

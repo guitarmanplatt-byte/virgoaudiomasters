@@ -1,5 +1,6 @@
 #include "MainComponent.h"
 #include "Quantize.h"
+#include "PluginBrowser.h"
 
 namespace studio
 {
@@ -62,7 +63,8 @@ void MainComponent::pluginMenu()
     if (found == list.end()) return;
     auto rack = found->plugins;
     juce::PopupMenu menu;
-    menu.addItem(1, "Add VST3 effect...");
+    menu.addItem(1, "Browse / scan installed VST3 effects...");
+    menu.addItem(2, "Choose VST3 file manually...");
     menu.addSectionHeader("Signal order: repair > effects > track gain / pan");
     if (rack)
         for (size_t i = 0; i < rack->entries.size(); ++i)
@@ -83,7 +85,8 @@ void MainComponent::pluginMenu()
         [safe = juce::Component::SafePointer<MainComponent>(this), id, rack](int result)
     {
         if (!safe || !safe->canEdit() || safe->selectedId != id) return;
-        if (result == 1) { safe->addPlugin(); return; }
+        if (result == 1) { safe->browsePlugins(); return; }
+        if (result == 2) { safe->addPlugin(); return; }
         if (!rack || result < 100) return;
         const int index = (result - 100) / 10, action = (result - 100) % 10;
         if (index < 0 || index >= static_cast<int>(rack->entries.size())) return;
@@ -108,6 +111,37 @@ void MainComponent::pluginMenu()
         safe->dirty = true; safe->hasMeasurements = false;
         safe->showStatus("Effect rack updated. Play to audition; save the project to preserve settings.");
     });
+}
+
+void MainComponent::browsePlugins()
+{
+    if (!canEdit() || selectedId.isEmpty()) return;
+    if (!pluginBrowser)
+    {
+        pluginBrowser = createPluginBrowser([safe = juce::Component::SafePointer<MainComponent>(this)]
+            (const juce::PluginDescription& description) -> juce::String
+        {
+            if (!safe || !safe->canEdit()) return "Finish the current operation before loading a plugin.";
+            const auto id = safe->selectedId;
+            const auto tracks = safe->engine.tracks();
+            if (id.isEmpty() || std::none_of(tracks.begin(), tracks.end(),
+                [&](const Track& track) { return track.id == id; }))
+                return "Select an audio track in the main window first.";
+            safe->engine.pause();
+            juce::String error;
+            safe->engine.updateTrack(id, [&](Track& track)
+            {
+                if (!track.plugins) track.plugins = std::make_shared<PluginChain>();
+                error = track.plugins->add(description, 48000);
+            });
+            if (error.isEmpty()) { safe->dirty = true; safe->hasMeasurements = false; }
+            safe->showStatus(error.isEmpty() ? description.name + " loaded onto the selected track." : error,
+                error.isNotEmpty());
+            return error;
+        });
+    }
+    pluginBrowser->setVisible(true);
+    pluginBrowser->toFront(true);
 }
 
 void MainComponent::addPlugin()

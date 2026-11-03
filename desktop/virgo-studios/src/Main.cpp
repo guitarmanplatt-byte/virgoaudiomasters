@@ -1,5 +1,6 @@
 #include "MainComponent.h"
 #include "EngineTests.h"
+#include "PluginBrowser.h"
 #include "StartupArguments.h"
 
 class VirgoStudiosApplication final : public juce::JUCEApplication
@@ -27,7 +28,25 @@ public:
         }
         window = std::make_unique<Window>();
         // CI can capture the real native interface without simulating audio hardware.
-        if (argument.startsWith("--screenshot="))
+        if (argument.startsWith("--plugin-browser-screenshot="))
+        {
+            const auto file = juce::File(argument.fromFirstOccurrenceOf("=", false, false).unquoted());
+            browserPreview = studio::createPluginBrowser([](const juce::PluginDescription&)
+                { return juce::String("Select a track in the main window first."); });
+            juce::Timer::callAfterDelay(1500, [this, file]
+            {
+                auto* content = browserPreview->getContentComponent();
+                const auto image = content->createComponentSnapshot(content->getLocalBounds());
+                file.getParentDirectory().createDirectory();
+                if (auto output = file.createOutputStream())
+                {
+                    juce::PNGImageFormat png;
+                    png.writeImageToStream(image, *output);
+                }
+                quit();
+            });
+        }
+        else if (argument.startsWith("--screenshot="))
         {
             const auto file = juce::File(argument.fromFirstOccurrenceOf("=", false, false).unquoted());
             juce::Timer::callAfterDelay(1500, [this, file]
@@ -43,7 +62,7 @@ public:
             });
         }
     }
-    void shutdown() override { window.reset(); }
+    void shutdown() override { browserPreview.reset(); window.reset(); }
     void systemRequestedQuit() override
     {
         if (window) window->content->requestClose([this] { quit(); });
@@ -54,6 +73,7 @@ public:
         if (window) window->toFront(true);
     }
 private:
+    std::unique_ptr<juce::DocumentWindow> browserPreview;
     class Window final : public juce::DocumentWindow
     {
     public:

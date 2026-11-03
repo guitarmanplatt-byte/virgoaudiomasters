@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(VirgoStudios VERSION 0.2.0 LANGUAGES C CXX)
+project(VirgoStudios VERSION 0.3.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(CTest)
@@ -15,15 +15,15 @@ endif()
 juce_add_gui_app(VirgoStudios
     COMPANY_NAME "VirgoAudioMasters"
     PRODUCT_NAME "Virgo Studios"
-    VERSION 0.2.0)
+    VERSION 0.3.0)
 target_sources(VirgoStudios PRIVATE
     src/Main.cpp src/AudioEngine.cpp src/MainComponent.cpp src/Session.cpp src/Assistant.cpp
-    src/PluginChain.cpp src/TrackTools.cpp)
+    src/PluginChain.cpp src/TrackTools.cpp src/PluginBrowser.cpp)
 target_compile_definitions(VirgoStudios PRIVATE
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
     JUCE_PLUGINHOST_VST3=1
     JUCE_APPLICATION_NAME_STRING="Virgo Studios"
-    JUCE_APPLICATION_VERSION_STRING="0.2.0")
+    JUCE_APPLICATION_VERSION_STRING="0.3.0")
 target_link_libraries(VirgoStudios PRIVATE
     juce::juce_audio_utils juce::juce_dsp
     juce::juce_recommended_config_flags

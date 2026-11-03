@@ -32,6 +32,7 @@ private:
     void exportAudio();
     void pluginMenu();
     void addPlugin();
+    void browsePlugins();
     void quantizeAudio();
     void bounceTrack();
     void batchExport();
@@ -62,6 +63,7 @@ private:
     juce::File projectFile;
     bool dirty = false, busy = false, updatingControls = false;
     std::vector<std::unique_ptr<juce::DocumentWindow>> pluginWindows;
+    std::unique_ptr<juce::DocumentWindow> pluginBrowser;
     int scrollRow = 0;
     double dragOffset = 0, dragMouseX = 0;
     Measurements measurements;

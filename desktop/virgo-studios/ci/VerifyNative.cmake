@@ -30,3 +30,11 @@ endif()
 # image of the real native interface in its build log for release verification.
 execute_process(COMMAND powershell -NoProfile -Command
     "Write-Output ('VIRGO_NATIVE_PREVIEW:' + [Convert]::ToBase64String([IO.File]::ReadAllBytes('${PREVIEW}')))")
+set(browserPreview "${PREVIEW}.plugins.png")
+execute_process(COMMAND "${APP}" "--plugin-browser-screenshot=${browserPreview}"
+    RESULT_VARIABLE browserResult TIMEOUT 30)
+if(NOT browserResult EQUAL 0 OR NOT EXISTS "${browserPreview}")
+    message(FATAL_ERROR "Virgo Studios plugin browser failed to render")
+endif()
+execute_process(COMMAND powershell -NoProfile -Command
+    "Write-Output ('VIRGO_PLUGIN_BROWSER_PREVIEW:' + [Convert]::ToBase64String([IO.File]::ReadAllBytes('${browserPreview}')))")

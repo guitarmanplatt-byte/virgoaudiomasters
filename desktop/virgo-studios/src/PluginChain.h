@@ -17,6 +17,7 @@ public:
     };
     std::vector<Entry> entries;
     juce::String add(const juce::File&, double rate);
+    juce::String add(const juce::PluginDescription&, double rate);
     juce::String restore(const juce::var&, double rate);
     juce::var save() const;
     std::shared_ptr<PluginChain> clone(double rate) const;

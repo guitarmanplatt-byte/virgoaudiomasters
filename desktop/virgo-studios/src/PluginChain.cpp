@@ -52,6 +52,13 @@ juce::String PluginChain::add(const juce::File& file, double rate)
     return instantiate(*found[0], {}, false, rate);
 }
 
+juce::String PluginChain::add(const juce::PluginDescription& description, double rate)
+{
+    if (entries.size() >= 8) return "A track supports up to eight effects in this preview.";
+    if (description.pluginFormatName != "VST3") return "Only Windows x64 VST3 audio effects are supported.";
+    return instantiate(description, {}, false, rate);
+}
+
 juce::var PluginChain::save() const
 {
     juce::Array<juce::var> list;

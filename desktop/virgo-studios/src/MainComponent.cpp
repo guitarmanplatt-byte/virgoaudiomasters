@@ -184,6 +184,7 @@ MainComponent::~MainComponent()
     stopTimer(); cancelled.store(true);
     worker.removeAllJobs(true, -1);
     pluginWindows.clear();
+    pluginBrowser.reset();
     setLookAndFeel(nullptr);
 }
 
@@ -215,7 +216,7 @@ void MainComponent::paint(juce::Graphics& g)
     g.setColour(panel); g.fillRect(0, 0, getWidth(), 128);
     label(g, "VIRGO", {22, 13, 110, 30}, 27, gold, true);
     label(g, "STUDIOS", {134, 17, 110, 25}, 20, text, true);
-    label(g, "WORKSTATION  /  0.2 PREVIEW", {24, 48, 240, 16}, 9, muted);
+    label(g, "WORKSTATION  /  0.3 PREVIEW", {24, 48, 240, 16}, 9, muted);
     const double position = engine.position();
     if (getWidth() > 1280)
         label(g, "48 kHz export  /  24-bit WAV", {590, 88, 220, 18}, 11, muted);

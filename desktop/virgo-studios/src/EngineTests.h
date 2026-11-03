@@ -102,12 +102,49 @@ inline int runEngineTests(const juce::File& pluginFile = {})
         }
         if (pluginFile != juce::File())
         {
+            std::cout << "VST3 TEST: scanning plugin directory\n";
+            juce::AudioPluginFormatManager scanFormats;
+            scanFormats.addDefaultFormats();
+            juce::KnownPluginList catalogue;
+            juce::AudioPluginFormat* vst3 = nullptr;
+            for (auto* format : scanFormats.getFormats())
+                if (format->getName() == "VST3") vst3 = format;
+            require(vst3 != nullptr, "VST3 scanner unavailable");
+            juce::PluginDirectoryScanner scanner(catalogue, *vst3,
+                juce::FileSearchPath(pluginFile.getParentDirectory().getFullPathName()), true,
+                directory.getChildFile("scan-marker.txt"));
+            juce::String scannedName;
+            while (scanner.scanNextFile(true, scannedName)) {}
+            require(!catalogue.getTypes().isEmpty(), "Folder scan did not discover the VST3 plugin");
+            const auto catalogFile = directory.getChildFile("plugins.xml");
+            require(catalogue.createXml()->writeTo(catalogFile), "Could not persist plugin catalogue");
+            juce::KnownPluginList reopened;
+            auto catalogueXml = juce::XmlDocument::parse(catalogFile);
+            require(catalogueXml != nullptr, "Could not read plugin catalogue");
+            reopened.recreateFromXml(*catalogueXml);
+            require(reopened.getTypes().size() == catalogue.getTypes().size(), "Saved plugin catalogue lost entries");
+            // Keep the array alive while selecting a description from multi-plugin bundles.
+            const auto types = reopened.getTypes();
+            const auto selected = std::find_if(types.begin(), types.end(),
+                [&](const juce::PluginDescription& type) { return juce::File(type.fileOrIdentifier) == pluginFile; });
+            require(selected != types.end(), "Discovered plugin identity/path was not preserved");
+            juce::PluginDirectoryScanner rescan(catalogue, *vst3,
+                juce::FileSearchPath(pluginFile.getParentDirectory().getFullPathName()), true,
+                directory.getChildFile("scan-marker.txt"));
+            while (rescan.scanNextFile(true, scannedName)) {}
+            require(catalogue.getTypes().size() == types.size(), "Rescanning created duplicate plugins");
+            auto instrument = *selected;
+            instrument.isInstrument = true;
+            PluginChain rejected;
+            require(rejected.add(instrument, 48000).isNotEmpty() && rejected.entries.empty(),
+                "Instrument was accepted by the audio effect rack");
             std::cout << "VST3 TEST: loading " << pluginFile.getFullPathName() << '\n';
             auto rack = std::make_shared<PluginChain>();
-            error = rack->add(pluginFile, 48000);
+            error = rack->add(*selected, 48000);
             std::cout << "VST3 TEST: load returned " << error << '\n';
             require(error.isEmpty(), ("VST3 load failed: " + error).toRawUTF8());
             require(rack->entries.size() == 1, "Plugin was not inserted");
+            std::cout << "PASS: VST3 folder discovery, catalogue save/reload, selected plugin loading\n";
             auto& processor = *rack->entries[0].processor;
             require(processor.getParameters().size() > 0, "Plugin parameters unavailable");
             // Deliberately change a parameter, then verify saved/restored state.
