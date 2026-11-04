@@ -1,0 +1,10 @@
+execute_process(COMMAND "${ENGINE_TEST}" RESULT_VARIABLE engineResult TIMEOUT 120)
+if(NOT engineResult EQUAL 0)
+    message(FATAL_ERROR "Virgo Pitch engine checks failed: ${engineResult}")
+endif()
+execute_process(COMMAND "${TEST_APP}" "${PLUGIN_BINARY}" "${PREVIEW}" RESULT_VARIABLE result TIMEOUT 180)
+if(NOT result EQUAL 0 OR NOT EXISTS "${PREVIEW}")
+    message(FATAL_ERROR "Virgo Pitch host/signal/editor checks failed: ${result}")
+endif()
+execute_process(COMMAND powershell -NoProfile -Command
+    "Write-Output ('VIRGO_PITCH_PREVIEW:' + [Convert]::ToBase64String([IO.File]::ReadAllBytes('${PREVIEW}')))")
