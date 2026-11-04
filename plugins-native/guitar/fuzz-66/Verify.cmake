@@ -1,0 +1,10 @@
+execute_process(COMMAND "${CIRCUIT_TEST}" RESULT_VARIABLE circuitResult TIMEOUT 60)
+if(NOT circuitResult EQUAL 0)
+    message(FATAL_ERROR "Fuzz 66 circuit checks failed: ${circuitResult}")
+endif()
+execute_process(COMMAND "${TEST_APP}" "${PLUGIN_BINARY}" "${PREVIEW}" RESULT_VARIABLE result TIMEOUT 90)
+if(NOT result EQUAL 0 OR NOT EXISTS "${PREVIEW}")
+    message(FATAL_ERROR "Fuzz 66 host/signal/editor checks failed: ${result}")
+endif()
+execute_process(COMMAND powershell -NoProfile -Command
+    "Write-Output ('VIRGO_FUZZ66_PREVIEW:' + [Convert]::ToBase64String([IO.File]::ReadAllBytes('${PREVIEW}')))")
