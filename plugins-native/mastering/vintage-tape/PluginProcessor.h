@@ -11,7 +11,7 @@
  *   • Head-bump low-shelf biquad
  *   • HF rolloff lowpass biquad
  *   • Wow & flutter via interpolated circular delay buffer
- *   • Dry/wet mix + output trim
+ *   • Dry/wet mix + sample-peak brickwall + output trim
  */
 class VAVintageTapeProcessor : public juce::AudioProcessor
 {

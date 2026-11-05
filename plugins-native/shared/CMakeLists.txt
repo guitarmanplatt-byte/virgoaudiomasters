@@ -2,6 +2,8 @@ add_library(VirgoShared STATIC
     VirgoLookAndFeel.cpp
     VirgoGenericEditor.cpp
 )
+# This archive is linked into plugin shared libraries on Linux as well as macOS.
+set_target_properties(VirgoShared PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_include_directories(VirgoShared PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 

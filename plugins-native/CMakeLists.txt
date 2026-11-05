@@ -28,6 +28,12 @@ add_compile_definitions(
 # ── Shared LookAndFeel + generic editor library ────────────────────────────────
 add_subdirectory(shared)
 
+# Native workstation shares JUCE, but remains an independent application.
+option(VIRGO_BUILD_STUDIOS "Build the Virgo Studios desktop workstation" ${WIN32})
+if(VIRGO_BUILD_STUDIOS)
+    add_subdirectory(../desktop/virgo-studios ${CMAKE_CURRENT_BINARY_DIR}/virgo-studios)
+endif()
+
 # ── Mastering plugins ─────────────────────────────────────────────────────────
 add_subdirectory(mastering/utility)
 add_subdirectory(mastering/dynamic-eq)
@@ -39,6 +45,11 @@ add_subdirectory(mastering/low-end-focus)
 add_subdirectory(mastering/clarity)
 add_subdirectory(mastering/vintage-tape)
 add_subdirectory(mastering/silver-opto)
+add_subdirectory(guitar/fuzz-66)
+add_subdirectory(pitch/virgo-pitch)
+if(TARGET VirgoStudios AND TARGET VASilverOpto_VST3)
+    add_dependencies(VirgoStudios VASilverOpto_VST3)
+endif()
 
 # ── Restoration plugins ───────────────────────────────────────────────────────
 add_subdirectory(restoration/de-clip)

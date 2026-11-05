@@ -20,3 +20,13 @@ target_link_libraries(VAVintageTape
     PRIVATE VirgoShared juce::juce_audio_utils juce::juce_dsp
     PUBLIC  juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
 juce_generate_juce_header(VAVintageTape)
+
+if(BUILD_TESTING)
+    juce_add_console_app(VAVintageTapeTests PRODUCT_NAME "VA Vintage Tape Tests")
+    target_sources(VAVintageTapeTests PRIVATE PluginProcessor.cpp VintageTapeTests.cpp)
+    target_link_libraries(VAVintageTapeTests
+        PRIVATE VirgoShared juce::juce_audio_utils juce::juce_dsp
+        PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+    add_test(NAME VAVintageTapeSignalTests COMMAND VAVintageTapeTests)
+    set_tests_properties(VAVintageTapeSignalTests PROPERTIES TIMEOUT 120)
+endif()

@@ -119,8 +119,12 @@ void VAVintageTapeProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
 
     for (int i = 0; i < N; ++i)
     {
-        float l = inL[i];
-        float r = inR[i];
+        // Preserve both dry samples before writing either output. In mono the
+        // read/write pointers alias, so reading inR after writing outL is unsafe.
+        const float dryL = inL[i];
+        const float dryR = inR[i];
+        float l = dryL;
+        float r = dryR;
 
         // 1. Head-bump low shelf
         l = mBump.tickL(l);
@@ -185,9 +189,12 @@ void VAVintageTapeProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
 
         mWritePos = (mWritePos + 1) % bufSize;
 
-        // Dry/wet mix and trim
-        outL[i] = (inL[i] * (1.0f - mix) + outSampleL * mix) * trimLin;
-        outR[i] = (inR[i] * (1.0f - mix) + outSampleR * mix) * trimLin;
+        // Sample-peak brickwall before trim: the trim value is the resulting
+        // dBFS ceiling. Keep fully dry audio untouched (apart from output gain).
+        const float mixedL = dryL * (1.0f - mix) + outSampleL * mix;
+        const float mixedR = dryR * (1.0f - mix) + outSampleR * mix;
+        outL[i] = (mix == 0.0f ? dryL : Virgo::clampf(mixedL, -1.0f, 1.0f)) * trimLin;
+        outR[i] = (mix == 0.0f ? dryR : Virgo::clampf(mixedR, -1.0f, 1.0f)) * trimLin;
     }
 }
 
