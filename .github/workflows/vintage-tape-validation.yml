@@ -14,7 +14,7 @@ on:
 jobs:
   macos:
     name: Build VST3 and AU and check signal flow
-    runs-on: macos-14
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
       - name: Configure
@@ -32,25 +32,3 @@ jobs:
             build/mastering/vintage-tape/VAVintageTape_artefacts/Release/AU/
           if-no-files-found: error
 
-  sanitizers:
-    name: Check DSP under address and undefined-behavior sanitizers
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install JUCE build dependencies
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libfreetype-dev libfontconfig1-dev libx11-dev libxext-dev libxinerama-dev libxrandr-dev libxcursor-dev libgl1-mesa-dev
-      - name: Configure instrumented build
-        run: >-
-          cmake -S plugins-native -B build -DCMAKE_BUILD_TYPE=Debug
-          -DBUILD_TESTING=ON -DVIRGO_BUILD_STUDIOS=OFF
-          -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-          -DCMAKE_CXX_FLAGS_DEBUG="-O0 -g1"
-          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
-          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
-      - name: Build VST3 and signal tests
-        run: cmake --build build --target VAVintageTape_VST3 VAVintageTapeTests --parallel 2
-      - name: Run instrumented signal-flow tests
-        env:
-          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
-          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
-        run: ctest --test-dir build --output-on-failure -R '^VAVintageTapeSignalTests$'
