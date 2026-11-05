@@ -14,7 +14,7 @@ void RenderState::prepare(double sampleRate)
     {
         if (track.plugins)
         {
-            track.plugins->prepare(rate);
+            track.plugins->prepare(rate, offline);
             commonLatency = std::max(commonLatency, track.plugins->latency());
         }
     }
@@ -87,7 +87,10 @@ void RenderState::processRaw(double time, juce::AudioBuffer<float>& output)
             const auto* data = track.audio->getReadPointer(std::min(channel, track.audio->getNumChannels() - 1));
             return data[index] + fraction * (data[next] - data[index]);
         };
-        float l = read(0), r = read(1);
+        float envelope = 1;
+        if (track.fadeIn > 0) envelope *= static_cast<float>(std::min(1.0, local / track.fadeIn));
+        if (track.fadeOut > 0) envelope *= static_cast<float>(std::min(1.0, (track.duration() - local) / track.fadeOut));
+        float l = read(0) * envelope, r = read(1) * envelope;
         track.dsp.process(l, r);
         input.setSample(0, i, l); input.setSample(1, i, r);
         }
@@ -123,6 +126,7 @@ AudioEngine::AudioEngine() { recordThread.startThread(); }
 AudioEngine::~AudioEngine()
 {
     devices.removeAudioCallback(this);
+    playbackCache.clear();
     stopRecording();
     recordThread.stopThread(5000);
 }
@@ -185,17 +189,24 @@ Track AudioEngine::loadTrack(const juce::File& file, juce::String& error)
 bool AudioEngine::addTrack(Track track, juce::String& error)
 {
     if (!track.audio) { error = "No decoded audio."; return false; }
+    invalidatePreparedPlayback();
     const juce::ScopedLock lock(mutex);
     std::uint64_t bytes = 0;
+    std::vector<const void*> counted;
     for (const auto& value : state.tracks)
-        bytes += static_cast<std::uint64_t>(value.audio->getNumSamples()) * value.audio->getNumChannels() * sizeof(float);
-    bytes += static_cast<std::uint64_t>(track.audio->getNumSamples()) * track.audio->getNumChannels() * sizeof(float);
-    if (bytes > 512ULL * 1024 * 1024 || state.tracks.size() >= 32)
+        if (value.audio && std::find(counted.begin(), counted.end(), value.audio.get()) == counted.end())
+        {
+            counted.push_back(value.audio.get());
+            bytes += static_cast<std::uint64_t>(value.audio->getNumSamples()) * value.audio->getNumChannels() * sizeof(float);
+        }
+    if (std::find(counted.begin(), counted.end(), track.audio.get()) == counted.end())
+        bytes += static_cast<std::uint64_t>(track.audio->getNumSamples()) * track.audio->getNumChannels() * sizeof(float);
+    if (bytes > 512ULL * 1024 * 1024 || state.tracks.size() >= 128)
     {
-        error = "This first version supports 32 tracks and 512 MB of decoded project audio.";
+        error = "This version supports 128 clip lanes and 512 MB of unique decoded project audio.";
         return false;
     }
-    state.tracks.push_back(std::move(track)); state.prepare(state.rate);
+    state.tracks.push_back(std::move(track)); state.prepare(state.rate); ++editRevision;
     return true;
 }
 
@@ -206,31 +217,37 @@ std::vector<Track> AudioEngine::tracks() const
 
 void AudioEngine::updateTrack(const juce::String& id, const std::function<void(Track&)>& update)
 {
+    invalidatePreparedPlayback();
     const juce::ScopedLock lock(mutex);
     for (auto& track : state.tracks) if (track.id == id) update(track);
     state.error.clear();
     state.prepare(state.rate);
+    ++editRevision;
 }
 
 void AudioEngine::removeTrack(const juce::String& id)
 {
+    invalidatePreparedPlayback();
     const juce::ScopedLock lock(mutex);
     state.tracks.erase(std::remove_if(state.tracks.begin(), state.tracks.end(),
         [&](const Track& track) { return track.id == id; }), state.tracks.end());
     state.prepare(state.rate);
+    ++editRevision;
 }
 
 void AudioEngine::replaceTracks(std::vector<Track> tracks, MasterSettings master)
 {
+    invalidatePreparedPlayback();
     stop();
     const juce::ScopedLock lock(mutex);
-    state.tracks = std::move(tracks); state.master = master; state.prepare(state.rate);
+    state.tracks = std::move(tracks); state.master = master; state.prepare(state.rate); ++editRevision;
 }
 
 void AudioEngine::setMaster(MasterSettings master)
 {
+    invalidatePreparedPlayback();
     const juce::ScopedLock lock(mutex);
-    state.master = master; state.masterDSP.prepare(state.rate, master);
+    state.master = master; state.masterDSP.prepare(state.rate, master); ++editRevision;
 }
 
 MasterSettings AudioEngine::masterSettings() const
@@ -257,31 +274,54 @@ RenderState AudioEngine::snapshot(bool includeMaster, bool clonePlugins) const
         result.tracks.clear();
     }
     if (!includeMaster) result.master.enabled = false;
+    result.offline = true;
     result.prepare(48000); return result;
 }
 
 void AudioEngine::play()
 {
+    if (playbackCache.available())
+    { playing.store(playbackCache.play(playhead.load())); return; }
     const juce::ScopedLock lock(mutex);
     state.error.clear(); state.prepare(state.rate); playing.store(true);
 }
+juce::String AudioEngine::playPrepared(const juce::File& file)
+{
+    playing.store(false);
+    auto error = playbackCache.load(file, deviceRate, deviceBlockSize);
+    if (error.isNotEmpty()) return error;
+    { const juce::ScopedLock lock(mutex); state.error.clear(); }
+    if (!playbackCache.play(playhead.load()))
+    { playbackCache.clear(); return "The disk read-ahead buffer could not be prepared. Try a faster/local drive."; }
+    playing.store(true);
+    return {};
+}
+void AudioEngine::invalidatePreparedPlayback()
+{
+    if (playbackCache.available())
+    { playing.store(false); playbackCache.clear(); outputPeak.store(0); }
+}
 juce::String AudioEngine::processingError() const
 {
+    if (playbackCache.starved()) return "Safe playback paused: storage could not keep up. No timeline samples were skipped. Press Play to refill.";
     const juce::ScopedLock lock(mutex); return state.error;
 }
-void AudioEngine::pause() { playing.store(false); }
+void AudioEngine::pause() { playing.store(false); playbackCache.pause(); }
 void AudioEngine::stop() { playing.store(false); seek(0); }
 void AudioEngine::seek(double seconds)
 {
     if (recording.load()) return;
     const juce::ScopedLock lock(mutex);
     playhead.store(std::clamp(seconds, 0.0, state.duration));
-    state.prepare(state.rate);
+    if (playbackCache.available())
+    { playing.store(false); playbackCache.pause(); playbackCache.seek(playhead.load()); }
+    else state.prepare(state.rate);
 }
 double AudioEngine::duration() const { const juce::ScopedLock lock(mutex); return state.duration; }
 
 juce::String AudioEngine::startRecording(const juce::File& file)
 {
+    invalidatePreparedPlayback();
     const juce::ScopedLock lock(mutex);
     if (recording.load()) return "Recording is already running.";
     const auto* device = devices.getCurrentAudioDevice();
@@ -311,6 +351,9 @@ juce::File AudioEngine::stopRecording()
 
 void AudioEngine::audioDeviceAboutToStart(juce::AudioIODevice* device)
 {
+    invalidatePreparedPlayback();
+    deviceRate = device->getCurrentSampleRate();
+    deviceBlockSize = device->getCurrentBufferSizeSamples();
     const juce::ScopedLock lock(mutex); state.prepare(device->getCurrentSampleRate());
 }
 
@@ -319,6 +362,31 @@ void AudioEngine::audioDeviceIOCallbackWithContext(const float* const* inputs, i
 {
     juce::ScopedNoDenormals noDenormals;
     for (int ch = 0; ch < numOutputs; ++ch) if (outputs[ch]) juce::FloatVectorOperations::clear(outputs[ch], count);
+    if (playbackCache.available() && !recording.load())
+    {
+        if (!playing.load()) { outputPeak.store(0); return; }
+        // No project mutex, plugin callbacks, preroll or file writes on this path.
+        float peak = 0;
+        for (int offset = 0; offset < count; offset += 512)
+        {
+            float storage[2][512] {};
+            float* channels[] {storage[0], storage[1]};
+            const int length = std::min(512, count - offset);
+            juce::AudioBuffer<float> audio(channels, 2, length);
+            if (!playbackCache.render(audio)) { playing.store(false); outputPeak.store(0); return; }
+            for (int i = 0; i < length; ++i)
+                for (int channel = 0; channel < std::min(2, numOutputs); ++channel)
+                    if (outputs[channel])
+                    {
+                        const float sample = audio.getSample(channel, i);
+                        outputs[channel][offset + i] = std::clamp(sample, -1.0f, 1.0f);
+                        peak = std::max(peak, std::abs(sample));
+                    }
+        }
+        playhead.store(playbackCache.position()); outputPeak.store(peak);
+        if (!playbackCache.playing()) playing.store(false);
+        return;
+    }
     const juce::ScopedLock lock(mutex);
     if (recording.load() && recorder && numInputs > 0)
     {

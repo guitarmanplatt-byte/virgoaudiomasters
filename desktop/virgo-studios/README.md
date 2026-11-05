@@ -1,5 +1,56 @@
 # Virgo Studios — Windows desktop preview
 
+## Playback and editing update
+
+**Safe Playback** is enabled by default. Press Play to render the current mix
+and all effects to a temporary WAV first. Preparation may take time. The DAW
+then streams that file through a large disk read-ahead buffer; plugin DSP,
+latency preroll, project locks, and export writes do not run in the hardware
+playback callback. Pause/resume reuses the prepared file. Changing tracks,
+master settings, or effect parameters invalidates it; press Play to prepare
+again. Stop cancels an in-progress preparation. Cache files are temporary and
+are removed when invalidated or on normal shutdown.
+
+This trades preparation time and temporary disk space for predictable playback
+with heavy effect chains. It is not a promise of unlimited plugins or immunity
+to a failing disk/audio driver. A storage underrun pauses playback with an
+explicit error instead of silently advancing across missing timeline samples.
+Disable Safe Playback for live effect auditioning. Recording/live mode still
+depends on CPU capacity and the audio device buffer selected in Audio Setup.
+Cached playback is a rendered snapshot, not live plugin automation.
+
+Each clip lane now supports up to **64 VST3 effects**, with a 30-second total
+reported-latency safety limit. Offline renders use independent instances, are
+marked non-realtime, and reprepare processors before each fresh render.
+Exports are processed as fast or slowly as needed; they do not depend on
+real-time device deadlines. Invalid plugin audio or clipping aborts export
+without replacing an existing destination. Plugins remain in-process; native
+crashes, licensing failures, or plugins deliberately producing silence cannot
+be universally repaired by the host.
+
+### Edit Audio
+
+Select an audio clip, then open **Edit Audio** at the bottom:
+
+- **Copy / Ctrl+C:** copy its current trimmed region and effect settings.
+- **Paste / Ctrl+V:** paste at the playhead on a new clip lane. Audio is shared
+  read-only; effect instances are independent.
+- **Split / Ctrl+E:** split at the playhead, aligned to a source sample.
+- **Splice range:** enter start/end in timeline seconds to remove that range
+  from the selected clip and close its gap. Other lanes do not move. Short
+  5 ms edge fades reduce clicks. This is not a global ripple edit.
+- **Undo / Ctrl+Z:** undo up to 20 consecutive clip edits. A different project
+  mutation clears this clip-edit history; there is no general-purpose undo
+  for every DAW action yet.
+
+Pieces appear on separate clip lanes in this preview, not multiple clips in a
+single shared track bus. Effects on separate pieces have independent state.
+All edits preserve original source files. Fades and clip boundaries are saved
+in the project. Up to 128 clip lanes and 512 MB of unique decoded source audio
+are supported; copied/split references do not duplicate the decoded buffer.
+This version reads earlier project formats; projects saved with splice fades
+use a newer format that earlier preview builds cannot open.
+
 A native black-and-gold audio workstation by VirgoAudioMasters, built with
 JUCE 7.0.12. This is an original application inspired by traditional multitrack
 DAW workflows, not Cakewalk code or a complete replacement for Cakewalk.
@@ -22,7 +73,7 @@ preview. Use headphones when recording to avoid feedback.
 ## Working features
 
 - Import WAV, FLAC, AIFF, and MP3 files (or drag them into the window).
-- Up to 32 tracks, with a 256 MB decoded limit per track and 512 MB per project.
+- Up to 128 clip lanes, with a 256 MB decoded limit per source and 512 MB of unique decoded source audio per project.
 - Stereo waveform timeline, track selection, seeking, zoom and vertical scroll.
   Double-click the transport time to seek to any `minutes:seconds` position.
 - Play/pause/stop; Space toggles playback when the main timeline has focus.
@@ -53,7 +104,7 @@ x64 `.vst3` file or bundle, normally in `C:\Program Files\Common Files\VST3`.
 Scanning loads plugin code in the DAW process. Save first and scan only trusted
 folders: a broken plugin can hang or crash the app. A crash-marker file helps
 skip plugins involved in an interrupted scan on the next scan.
-The rack supports eight stereo audio effects per track, native plugin editors
+The rack supports 64 stereo audio effects per clip lane, native plugin editors
 (or a generic parameter editor), bypass, removal and effect ordering.
 Silver Opto and other compatible VST3 effects can be loaded this way.
 The chain order is **repair → effects → gain/pan → master**.
@@ -88,7 +139,7 @@ Bounce/quantized takes are kept in `Documents\Virgo Studios Renders` and copied
 to the project's `.media` folder on save. Re-enable the original track and mute
 the rendered take to compare or revert. There is not yet a full undo system.
 
-Plugin latency is compensated across tracks (up to two seconds per rack), and
+Plugin latency is compensated across tracks (up to 30 seconds per rack), and
 offline rendering uses independent plugin instances so it does not advance the
 live rack's internal state. Reported effect tails are included up to ten seconds.
 Only stereo-compatible VST3 **effects** are supported: no VST2, AU, MIDI

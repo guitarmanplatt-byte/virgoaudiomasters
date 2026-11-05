@@ -48,10 +48,10 @@ MainComponent::MainComponent()
 
     for (auto* button : {&importButton, &newButton, &openButton, &saveButton, &exportButton, &setupButton,
                         &playButton, &stopButton, &recordButton, &analyseButton,
-                        &aiButton, &masterButton, &deleteButton, &pluginsButton, &quantizeButton, &bounceButton, &batchButton})
+                        &aiButton, &masterButton, &deleteButton, &pluginsButton, &quantizeButton, &bounceButton, &batchButton, &editButton})
         addAndMakeVisible(button);
     for (auto* button : {&muteButton, &soloButton, &repairButton, &highPassButton,
-                        &humButton, &gateButton, &clickButton, &masterEnabled})
+                        &humButton, &gateButton, &clickButton, &masterEnabled, &safePlayback})
         addAndMakeVisible(button);
     for (auto* slider : {&volumeSlider, &panSlider, &offsetSlider, &trimStartSlider,
                         &trimEndSlider, &zoomSlider, &masterGainSlider, &ceilingSlider, &gateSlider})
@@ -89,9 +89,10 @@ MainComponent::MainComponent()
         "This is a first-version workstation, not a complete Cakewalk replacement.");
     configureSlider(volumeSlider, -60, 12, 0.1, " dB");
     configureSlider(panSlider, -1, 1, 0.01, "");
-    configureSlider(offsetSlider, 0, 3600, 0.01, " s");
-    configureSlider(trimStartSlider, 0, 3600, 0.01, " s");
-    configureSlider(trimEndSlider, 0, 3600, 0.01, " s");
+    configureSlider(offsetSlider, 0, 3600, 0, " s");
+    configureSlider(trimStartSlider, 0, 3600, 0, " s");
+    configureSlider(trimEndSlider, 0, 3600, 0, " s");
+    for (auto* slider : {&offsetSlider, &trimStartSlider, &trimEndSlider}) slider->setNumDecimalPlacesToDisplay(6);
     configureSlider(zoomSlider, 10, 600, 1, " s");
     configureSlider(masterGainSlider, -12, 12, 0.1, " dB");
     configureSlider(ceilingSlider, -6, -0.1, 0.1, " dB");
@@ -112,14 +113,26 @@ MainComponent::MainComponent()
     quantizeButton.onClick = [this] { quantizeAudio(); };
     bounceButton.onClick = [this] { bounceTrack(); };
     batchButton.onClick = [this] { batchExport(); };
+    editButton.onClick = [this] { editMenu(); };
+    safePlayback.setToggleState(true, juce::dontSendNotification);
+    safePlayback.setTooltip("Pre-renders effects before playback, then streams a buffered WAV. Preparation can take time, but plugins no longer compete with the audio callback. Disable for live auditioning.");
+    safePlayback.onClick = [this]
+    {
+        if (busy || engine.isRecording()) { safePlayback.setToggleState(!safePlayback.getToggleState(), juce::dontSendNotification); return; }
+        engine.pause(); engine.invalidatePreparedPlayback();
+        showStatus(safePlayback.getToggleState() ? "Safe Playback enabled: Play prepares a plugin-free playback render."
+            : "Live playback enabled: CPU limits apply. Use Audio Setup to increase your device buffer.");
+    };
     setupButton.onClick = [this] { audioSetup(); };
     playButton.onClick = [this]
     {
-        if (engine.isRecording()) { record(); return; }
-        if (engine.isPlaying()) engine.pause();
-        else { if (engine.position() >= engine.duration()) engine.seek(0); engine.play(); }
+        playAudio();
     };
-    stopButton.onClick = [this] { if (engine.isRecording()) record(); else engine.stop(); };
+    stopButton.onClick = [this]
+    {
+        if (preparingPlayback) { cancelled.store(true); showStatus("Cancelling playback preparation..."); }
+        else if (engine.isRecording()) record(); else engine.stop();
+    };
     recordButton.onClick = [this] { record(); };
     analyseButton.onClick = [this] { analyseAudio(); };
     aiButton.onClick = [this] { askAI(); };
@@ -143,8 +156,9 @@ MainComponent::MainComponent()
             track.pan = static_cast<float>(panSlider.getValue());
             track.offset = offsetSlider.getValue();
             const double full = track.audio->getNumSamples() / track.sourceRate;
-            track.trimStart = std::clamp(trimStartSlider.getValue(), 0.0, std::max(0.0, full - 0.001));
-            track.trimEnd = std::clamp(trimEndSlider.getValue(), track.trimStart + 0.001, full);
+            const double oneSample = 1.0 / track.sourceRate;
+            track.trimStart = std::clamp(trimStartSlider.getValue(), 0.0, std::max(0.0, full - oneSample));
+            track.trimEnd = std::clamp(trimEndSlider.getValue(), track.trimStart + oneSample, full);
             track.mute = muteButton.getToggleState(); track.solo = soloButton.getToggleState();
             track.repair.enabled = repairButton.getToggleState(); track.repair.highPass = highPassButton.getToggleState();
             track.repair.hum = humButton.getToggleState(); track.repair.gate = gateButton.getToggleState();
@@ -216,7 +230,7 @@ void MainComponent::paint(juce::Graphics& g)
     g.setColour(panel); g.fillRect(0, 0, getWidth(), 128);
     label(g, "VIRGO", {22, 13, 110, 30}, 27, gold, true);
     label(g, "STUDIOS", {134, 17, 110, 25}, 20, text, true);
-    label(g, "WORKSTATION  /  0.3 PREVIEW", {24, 48, 240, 16}, 9, muted);
+    label(g, "WORKSTATION  /  0.4 PREVIEW", {24, 48, 240, 16}, 9, muted);
     const double position = engine.position();
     if (getWidth() > 1280)
         label(g, "48 kHz export  /  24-bit WAV", {590, 88, 220, 18}, 11, muted);
@@ -336,6 +350,8 @@ void MainComponent::resized()
     quantizeButton.setBounds(290, bottom + 245, 115, 24);
     bounceButton.setBounds(413, bottom + 245, 125, 24);
     batchButton.setBounds(546, bottom + 245, 125, 24);
+    editButton.setBounds(679, bottom + 245, 125, 24);
+    safePlayback.setBounds(730, 20, 265, 30);
     analysisScope.setBounds(right + 18, 178, 144, 27);
     analyseButton.setBounds(right + 170, 178, 144, 27);
     masterTarget.setBounds(right + 18, 216, 296, 28);
@@ -350,9 +366,13 @@ void MainComponent::resized()
 
 void MainComponent::timerCallback()
 {
+    if (!clipUndo.empty() && clipUndo.back().revision != engine.revision()) clipUndo.clear();
     for (const auto& track : engine.tracks())
         if (track.plugins && track.plugins->changed.exchange(false))
-        { dirty = true; hasMeasurements = false; }
+        {
+            dirty = true; hasMeasurements = false; clipUndo.clear();
+            engine.invalidatePreparedPlayback();
+        }
     if (engine.processingError().isNotEmpty()) showStatus(engine.processingError(), true);
     if (engine.isRecording() && engine.hasRecordingOverrun())
     {
@@ -360,6 +380,8 @@ void MainComponent::timerCallback()
         showStatus("Recording stopped: disk writer could not keep up. Partial take preserved at " + file.getFullPathName(), true);
     }
     analysisScope.setEnabled(!busy && !engine.isRecording());
+    playButton.setEnabled(!busy);
+    safePlayback.setEnabled(!busy && !engine.isRecording());
     if (!positionLabel.isBeingEdited())
     {
         const double position = engine.position();
@@ -412,6 +434,14 @@ void MainComponent::mouseWheelMove(const juce::MouseEvent&, const juce::MouseWhe
 
 bool MainComponent::keyPressed(const juce::KeyPress& key)
 {
+    if (key.getModifiers().isCommandDown())
+    {
+        const int code = juce::CharacterFunctions::toLowerCase(static_cast<juce::juce_wchar>(key.getKeyCode()));
+        if (code == 'c') { copyClip(); return true; }
+        if (code == 'v') { pasteClip(); return true; }
+        if (code == 'e') { splitClip(); return true; }
+        if (code == 'z') { undoClipEdit(); return true; }
+    }
     if (key == juce::KeyPress::spaceKey)
     {
         playButton.onClick(); return true;

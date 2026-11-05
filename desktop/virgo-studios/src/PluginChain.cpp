@@ -33,18 +33,17 @@ juce::String PluginChain::instantiate(const juce::PluginDescription& description
     processor->setRateAndBufferSizeDetails(rate, 128);
     if (state.getSize() > 0) processor->setStateInformation(state.getData(), static_cast<int>(state.getSize()));
     processor->prepareToPlay(rate, 128);
-    if (processor->getLatencySamples() > static_cast<int>(rate * 2)
-        || latency() + processor->getLatencySamples() > static_cast<int>(rate * 2))
-        return "This preview supports up to two seconds of total plugin latency per track.";
+    if (processor->getLatencySamples() > static_cast<int>(rate * 30)
+        || latency() + processor->getLatencySamples() > static_cast<int>(rate * 30))
+        return "The rack exceeds the safety limit of 30 seconds total plugin latency.";
     processor->addListener(this);
     entries.push_back({description, std::move(processor), bypass});
-    currentRate = rate;
     return {};
 }
 
 juce::String PluginChain::add(const juce::File& file, double rate)
 {
-    if (entries.size() >= 8) return "A track supports up to eight effects in this preview.";
+    if (entries.size() >= maximumEffects) return "A track supports up to 64 effects. Use Bounce Track to commit a longer chain.";
     juce::OwnedArray<juce::PluginDescription> found;
     for (auto* format : formats().getFormats())
         if (format->getName() == "VST3") format->findAllTypesForFile(found, file.getFullPathName());
@@ -54,7 +53,7 @@ juce::String PluginChain::add(const juce::File& file, double rate)
 
 juce::String PluginChain::add(const juce::PluginDescription& description, double rate)
 {
-    if (entries.size() >= 8) return "A track supports up to eight effects in this preview.";
+    if (entries.size() >= maximumEffects) return "A track supports up to 64 effects. Use Bounce Track to commit a longer chain.";
     if (description.pluginFormatName != "VST3") return "Only Windows x64 VST3 audio effects are supported.";
     return instantiate(description, {}, false, rate);
 }
@@ -79,7 +78,7 @@ juce::var PluginChain::save() const
 juce::String PluginChain::restore(const juce::var& data, double rate)
 {
     if (data.isVoid()) return {};
-    if (!data.isArray() || data.size() > 8) return "Invalid plugin rack in project.";
+    if (!data.isArray() || data.size() > maximumEffects) return "Invalid plugin rack in project.";
     for (int i = 0; i < data.size(); ++i)
     {
         auto xml = juce::parseXML(data[i]["description"].toString());
@@ -103,19 +102,18 @@ std::shared_ptr<PluginChain> PluginChain::clone(double rate) const
     return result;
 }
 
-void PluginChain::prepare(double rate)
+void PluginChain::prepare(double rate, bool offline)
 {
     for (auto& entry : entries)
     {
-        if (currentRate != rate)
-        {
-            entry.processor->releaseResources();
-            entry.processor->setRateAndBufferSizeDetails(rate, 128);
-            entry.processor->prepareToPlay(rate, 128);
-        }
+        // A number of effects only clear look-ahead/STFT state in prepareToPlay,
+        // not in reset(). Always start a new render from a clean processor.
+        entry.processor->releaseResources();
+        entry.processor->setNonRealtime(offline);
+        entry.processor->setRateAndBufferSizeDetails(rate, 128);
+        entry.processor->prepareToPlay(rate, 128);
         entry.processor->reset();
     }
-    currentRate = rate;
 }
 
 int PluginChain::latency() const
@@ -134,7 +132,9 @@ bool PluginChain::process(juce::AudioBuffer<float>& buffer, double seconds)
         if (!entry.bypass)
         {
             const juce::ScopedLock lock(entry.processor->getCallbackLock());
-            entry.processor->processBlock(buffer, midi);
+            if (entry.processor->isSuspended()) return false;
+            try { entry.processor->processBlock(buffer, midi); }
+            catch (const std::exception&) { buffer.clear(); return false; }
             // Third-party effects must not send NaN/Inf to hardware or disk.
             for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
                 for (int sample = 0; sample < buffer.getNumSamples(); ++sample)

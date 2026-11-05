@@ -1,4 +1,5 @@
 #include "MainComponent.h"
+#include <map>
 
 namespace studio
 {
@@ -16,6 +17,12 @@ float number(const juce::var& object, const juce::Identifier& key, float fallbac
     const float value = static_cast<float>(object[key]);
     return std::isfinite(value) ? std::clamp(value, low, high) : fallback;
 }
+double preciseNumber(const juce::var& object, const juce::Identifier& key, double fallback, double low, double high)
+{
+    if (!object.hasProperty(key)) return fallback;
+    const double value = static_cast<double>(object[key]);
+    return std::isfinite(value) ? std::clamp(value, low, high) : fallback;
+}
 }
 
 juce::var MainComponent::trackToJson(const Track& track, const juce::File& file)
@@ -23,6 +30,7 @@ juce::var MainComponent::trackToJson(const Track& track, const juce::File& file)
     return makeObject({
         {"id", track.id}, {"name", track.name}, {"file", file.getFullPathName()},
         {"offset", track.offset}, {"trimStart", track.trimStart}, {"trimEnd", track.trimEnd},
+        {"fadeIn", track.fadeIn}, {"fadeOut", track.fadeOut},
         {"volumeDb", track.volumeDb}, {"pan", track.pan}, {"mute", track.mute}, {"solo", track.solo},
         {"plugins", track.savedPlugins},
         {"repair", makeObject({{"enabled", track.repair.enabled}, {"highPass", track.repair.highPass},
@@ -81,21 +89,25 @@ void MainComponent::saveProject(std::function<void(bool)> completion)
             const auto media = destination.getSiblingFile(destination.getFileNameWithoutExtension() + ".media");
             if (media.createDirectory().failed()) error = "Cannot create project media directory.";
             juce::Array<juce::var> serializedTracks;
+            std::map<juce::String, juce::File> storedMedia;
             for (const auto& track : render.tracks)
             {
                 if (error.isNotEmpty()) break;
-                const auto target = media.getChildFile(track.id + track.file.getFileExtension());
+                const auto existing = storedMedia.find(track.file.getFullPathName());
+                const auto target = existing != storedMedia.end() ? existing->second
+                    : media.getChildFile(track.id + track.file.getFileExtension());
                 if (track.file != target && !target.existsAsFile() && !track.file.copyFileTo(target))
                 {
                     error = "Could not preserve source media: " + track.file.getFullPathName(); break;
                 }
+                storedMedia.emplace(track.file.getFullPathName(), target);
                 auto json = trackToJson(track, target);
                 json.getDynamicObject()->setProperty("file", target.getRelativePathFrom(destination.getParentDirectory()));
                 serializedTracks.add(json);
             }
             if (error.isEmpty())
             {
-                const auto json = makeObject({{"format", "Virgo Studios"}, {"version", 2},
+                const auto json = makeObject({{"format", "Virgo Studios"}, {"version", 3},
                     {"tracks", serializedTracks}, {"master", masterToJson(render.master)}});
                 juce::TemporaryFile temporary(destination);
                 if (!temporary.getFile().replaceWithText(juce::JSON::toString(json, false))
@@ -158,24 +170,34 @@ void MainComponent::openProject()
                 MasterSettings master;
                 const auto* list = data["tracks"].getArray();
                 const int version = static_cast<int>(data["version"]);
-                if (data["format"].toString() != "Virgo Studios" || version < 1 || version > 2
-                    || !list || list->size() > 32)
+                if (data["format"].toString() != "Virgo Studios" || version < 1 || version > 3
+                    || !list || list->size() > 128)
                     error = "This is not a supported Virgo Studios project.";
                 std::uint64_t bytes = 0;
+                std::map<juce::String, Track> decodedSources;
                 if (error.isEmpty()) for (const auto& item : *list)
                 {
                     const auto path = item["file"].toString();
                     const auto source = juce::File::isAbsolutePath(path) ? juce::File(path) : file.getParentDirectory().getChildFile(path);
-                    auto track = AudioEngine::loadTrack(source, error);
+                    auto cached = decodedSources.find(source.getFullPathName());
+                    auto track = cached != decodedSources.end() ? cached->second : AudioEngine::loadTrack(source, error);
                     if (error.isNotEmpty()) break;
-                    bytes += static_cast<std::uint64_t>(track.audio->getNumSamples()) * track.audio->getNumChannels() * sizeof(float);
+                    if (cached == decodedSources.end())
+                    {
+                        bytes += static_cast<std::uint64_t>(track.audio->getNumSamples()) * track.audio->getNumChannels() * sizeof(float);
+                        decodedSources.emplace(source.getFullPathName(), track);
+                    }
+                    track.id = juce::Uuid().toString();
                     if (bytes > 512ULL * 1024 * 1024) { error = "Project exceeds the 512 MB decoded-audio limit."; break; }
                     // IDs supplied by a project are not trusted as filesystem names.
                     track.name = item["name"].toString().substring(0, 120);
-                    track.offset = number(item, "offset", 0, 0, 3600);
-                    const auto full = static_cast<float>(track.trimEnd);
-                    track.trimStart = number(item, "trimStart", 0, 0, std::max(0.0f, full - 0.001f));
-                    track.trimEnd = number(item, "trimEnd", full, static_cast<float>(track.trimStart + 0.001), full);
+                    track.offset = preciseNumber(item, "offset", 0, 0, 3600);
+                    const auto full = track.trimEnd;
+                    const auto oneSample = 1.0 / track.sourceRate;
+                    track.trimStart = preciseNumber(item, "trimStart", 0, 0, std::max(0.0, full - oneSample));
+                    track.trimEnd = preciseNumber(item, "trimEnd", full, track.trimStart + oneSample, full);
+                    track.fadeIn = preciseNumber(item, "fadeIn", 0, 0, 0.1);
+                    track.fadeOut = preciseNumber(item, "fadeOut", 0, 0, 0.1);
                     track.volumeDb = number(item, "volumeDb", 0, -60, 12); track.pan = number(item, "pan", 0, -1, 1);
                     track.mute = static_cast<bool>(item["mute"]); track.solo = static_cast<bool>(item["solo"]);
                     const auto repair = item["repair"];

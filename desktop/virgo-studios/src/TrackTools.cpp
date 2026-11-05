@@ -308,7 +308,7 @@ void MainComponent::batchExport()
             for (auto track : render.tracks)
             {
                 if (error.isNotEmpty()) break;
-                RenderState stem; stem.tracks.push_back(std::move(track));
+                RenderState stem; stem.offline = true; stem.tracks.push_back(std::move(track));
                 stem.tracks[0].mute = stem.tracks[0].solo = false;
                 stem.prepare(48000);
                 // Equal lengths and original timeline offsets make stems easy to reimport.

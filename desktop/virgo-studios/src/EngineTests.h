@@ -2,6 +2,7 @@
 #include "AudioEngine.h"
 #include "TestEffect.h"
 #include "StartupArguments.h"
+#include "EditingTests.h"
 #include <iostream>
 #include <stdexcept>
 
@@ -183,7 +184,39 @@ inline int runEngineTests(const juce::File& pluginFile = {})
             }
             require(engine.tracks()[0].file == source, "Rendering replaced the original source");
             std::cout << "PASS: actual VST3 load, state restoration, independent offline instance, plugin bounce, bypass, batch WAV rendering\n";
+            rack->entries[0].bypass = false;
+            for (int count = 1; count < 12; ++count)
+                require(rack->add(*selected, 48000).isEmpty(), "Could not load a twelve-effect VST3 rack");
+            engine.updateTrack(track.id, [](Track&) {});
+            auto stacked = engine.snapshot(false);
+            require(stacked.error.isEmpty() && stacked.tracks[0].plugins->entries.size() == 12,
+                "Twelve-effect offline clone failed");
+            const auto multiFile = directory.getChildFile("twelve-vst3-effects.wav");
+            require(AudioEngine::exportWav(stacked, multiFile).isEmpty(), "Twelve-effect VST3 bounce failed");
+            error.clear();
+            const auto multiAudio = AudioEngine::loadTrack(multiFile, error);
+            require(error.isEmpty() && multiAudio.audio != nullptr, "Twelve-effect bounce cannot be read back");
+            int silentRun = 0, longestSilence = 0;
+            for (int sample = 0; sample < std::min(4800, multiAudio.audio->getNumSamples()); ++sample)
+            {
+                if (std::abs(multiAudio.audio->getSample(0, sample)) < 1e-7f) ++silentRun;
+                else silentRun = 0;
+                longestSilence = std::max(longestSilence, silentRun);
+            }
+            require(longestSilence < 512 && multiAudio.audio->getMagnitude(0, multiAudio.audio->getNumSamples()) > 1e-5f,
+                "Twelve-effect bounce went silent or contained an unexplained silent block");
+            auto clipboard = engine.tracks()[0];
+            clipboard.savedPlugins = clipboard.plugins->save(); clipboard.plugins.reset();
+            juce::String pastedId;
+            require(engine.pasteClip(clipboard, 0.2, pastedId, error), "Paste with VST3 settings failed");
+            const auto pastedTracks = engine.tracks();
+            require(pastedTracks.size() == 2 && pastedTracks[1].plugins != rack
+                    && pastedTracks[1].plugins->entries.size() == 12
+                    && pastedTracks[1].plugins->entries[0].processor.get() != rack->entries[0].processor.get(),
+                "Pasted clips shared live plugin instances");
+            std::cout << "PASS: twelve actual VST3 effects, independent offline chain, non-silent bounced WAV, pasted independent effect settings\n";
         }
+        runEditingAndRackTests(directory);
         std::cout << "PASS: import, waveform, mixing, offsets, trim, mute, mastering, WAV round-trip, source protection, atomic failed export\n";
         return 0;
     }

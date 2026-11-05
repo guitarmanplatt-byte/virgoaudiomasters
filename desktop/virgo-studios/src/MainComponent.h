@@ -36,6 +36,22 @@ private:
     void quantizeAudio();
     void bounceTrack();
     void batchExport();
+    void playAudio();
+    void editMenu();
+    void copyClip();
+    void pasteClip();
+    void splitClip();
+    void spliceClip();
+    void undoClipEdit();
+    struct ClipUndo
+    {
+        std::vector<Track> tracks;
+        juce::String selected;
+        double position = 0;
+        std::uint64_t revision = 0;
+    };
+    ClipUndo captureEdit() const;
+    void rememberEdit(ClipUndo);
     void finishTake(const juce::File&, const juce::String& originalId, double offset, bool copySettings);
     void analyseAudio();
     void askAI();
@@ -62,6 +78,9 @@ private:
     juce::String selectedId;
     juce::File projectFile;
     bool dirty = false, busy = false, updatingControls = false;
+    bool preparingPlayback = false, clipboardReady = false;
+    Track clipboard;
+    std::vector<ClipUndo> clipUndo;
     std::vector<std::unique_ptr<juce::DocumentWindow>> pluginWindows;
     std::unique_ptr<juce::DocumentWindow> pluginBrowser;
     int scrollRow = 0;
@@ -75,11 +94,11 @@ private:
         stopButton {"Stop"}, recordButton {"Record"}, analyseButton {"Analyze Audio"},
         aiButton {"AI Plan + Apply"}, masterButton {"Apply Mastering"}, deleteButton {"Remove Track"},
         pluginsButton {"VST3 Effects"}, quantizeButton {"Quantize"}, bounceButton {"Bounce Track"},
-        batchButton {"Batch Export"};
+        batchButton {"Batch Export"}, editButton {"Edit Audio"};
     juce::ToggleButton muteButton {"Mute"}, soloButton {"Solo"},
         repairButton {"Repair enabled"}, highPassButton {"DC / rumble filter"},
         humButton {"Hum removal"}, gateButton {"Noise gate"}, clickButton {"Click suppression"},
-        masterEnabled {"Master processing"};
+        masterEnabled {"Master processing"}, safePlayback {"Safe Playback (render first)"};
     juce::Slider volumeSlider, panSlider, offsetSlider, trimStartSlider, trimEndSlider,
         zoomSlider, masterGainSlider, ceilingSlider, gateSlider;
     juce::ComboBox humFrequency, analysisScope, masterTarget;

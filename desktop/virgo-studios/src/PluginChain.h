@@ -21,11 +21,11 @@ public:
     juce::String restore(const juce::var&, double rate);
     juce::var save() const;
     std::shared_ptr<PluginChain> clone(double rate) const;
-    void prepare(double rate);
+    static constexpr int maximumEffects = 64;
+    void prepare(double rate, bool offline = false);
     bool process(juce::AudioBuffer<float>&, double seconds);
     int latency() const;
 private:
-    double currentRate = 0;
     static juce::AudioPluginFormatManager& formats();
     juce::String instantiate(const juce::PluginDescription&, const juce::MemoryBlock&, bool, double);
     void audioProcessorParameterChanged(juce::AudioProcessor*, int, float) override { changed.store(true); }
