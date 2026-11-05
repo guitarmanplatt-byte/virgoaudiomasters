@@ -288,6 +288,7 @@ void AudioEngine::play()
 juce::String AudioEngine::playPrepared(const juce::File& file)
 {
     playing.store(false);
+    invalidatePreparedPlayback();
     auto error = playbackCache.load(file, deviceRate, deviceBlockSize);
     if (error.isNotEmpty()) return error;
     { const juce::ScopedLock lock(mutex); state.error.clear(); }
@@ -299,7 +300,14 @@ juce::String AudioEngine::playPrepared(const juce::File& file)
 void AudioEngine::invalidatePreparedPlayback()
 {
     if (playbackCache.available())
-    { playing.store(false); playbackCache.clear(); outputPeak.store(0); }
+    {
+        playing.store(false);
+        // Finish any in-flight cache read before releasing its reader/buffer.
+        // This lock is taken only while stopping/invalidating, never while
+        // rendering plugins or continuously playing the prepared file.
+        const juce::ScopedLock callbackBarrier(devices.getAudioCallbackLock());
+        playbackCache.clear(); outputPeak.store(0);
+    }
 }
 juce::String AudioEngine::processingError() const
 {
