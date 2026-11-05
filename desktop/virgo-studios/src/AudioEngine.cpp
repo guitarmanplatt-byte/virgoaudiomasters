@@ -1,4 +1,5 @@
 #include "AudioEngine.h"
+#include "RenderLength.h"
 #include <limits>
 
 namespace studio
@@ -439,7 +440,7 @@ Measurements AudioEngine::analyse(RenderState render, std::atomic<bool>* cancell
 {
     if (render.error.isNotEmpty()) return {};
     Measurements l, r;
-    const auto samples = static_cast<std::int64_t>(std::ceil(render.duration * render.rate));
+    const auto samples = renderSampleCount(render.duration, render.rate);
     for (std::int64_t start = 0; start < samples; start += 128)
     {
         if (cancelled && cancelled->load()) return {};
@@ -467,7 +468,7 @@ juce::String AudioEngine::exportWav(RenderState render, const juce::File& file, 
     std::unique_ptr<juce::AudioFormatWriter> writer(wav.createWriterFor(output.get(), render.rate, 2, 24, {}, 0));
     if (!writer) return "Could not create WAV writer.";
     output.release();
-    const auto total = static_cast<std::int64_t>(std::ceil(render.duration * render.rate));
+    const auto total = renderSampleCount(render.duration, render.rate);
     for (std::int64_t position = 0; position < total; position += 128)
     {
         if (cancelled && cancelled->load()) return "Export cancelled; destination was not changed.";

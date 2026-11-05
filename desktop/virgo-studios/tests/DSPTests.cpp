@@ -1,4 +1,5 @@
 #include "../src/AudioDSP.h"
+#include "../src/RenderLength.h"
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
@@ -14,6 +15,9 @@ int main()
     {
         for (const double rate : { 44100.0, 48000.0, 96000.0 })
         {
+            for (const auto count : {1, 127, 128, 24000, 24001, 10000001})
+                require(studio::renderSampleCount(count / rate, rate) == count, "Integer render length gained/lost a sample");
+            require(studio::renderSampleCount(24000.25 / rate, rate) == 24001, "Fractional render length was truncated");
             studio::Measurements measurement;
             studio::RepairDSP repair;
             studio::MasterDSP master;
@@ -83,7 +87,7 @@ int main()
             }
             require(std::abs(l) < 1e-6f, "Noise gate failed on low-level input");
         }
-        std::cout << "PASS: RMS/peak calibration, silence, bypass, stereo linking, finite output, sample ceiling, DC, hum, noise gate at 44.1/48/96 kHz\n";
+        std::cout << "PASS: exact/fractional render lengths, RMS/peak calibration, silence, bypass, stereo linking, finite output, sample ceiling, DC, hum, noise gate at 44.1/48/96 kHz\n";
         return EXIT_SUCCESS;
     }
     catch (const std::exception& error)
