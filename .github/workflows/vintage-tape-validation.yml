@@ -15,10 +15,14 @@ jobs:
   macos:
     name: Build VST3 and AU and check signal flow
     runs-on: macos-15-intel
+    env:
+      # JUCE 7 bootstraps juceaide in a nested CMake invocation. The environment
+      # also sets its deployment target, not just the plugin targets below.
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
     steps:
       - uses: actions/checkout@v4
       - name: Configure
-        run: cmake -S plugins-native -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DVIRGO_BUILD_STUDIOS=OFF
+        run: cmake -S plugins-native -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -DBUILD_TESTING=ON -DVIRGO_BUILD_STUDIOS=OFF
       - name: Build both plugin formats and headless tests
         run: cmake --build build --config Release --target VAVintageTape_VST3 VAVintageTape_AU VAVintageTapeTests --parallel 2
       - name: Run headless signal-flow tests
